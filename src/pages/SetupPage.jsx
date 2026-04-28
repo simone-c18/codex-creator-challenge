@@ -118,6 +118,9 @@ function SetupPage() {
         questions,
         interviewType,
         persona,
+        transcriptEntries: [],
+        videoBlobUrl: null,
+        report: null,
       });
       navigate("/interview");
     } catch (error) {

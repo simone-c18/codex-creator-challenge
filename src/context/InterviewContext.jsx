@@ -9,6 +9,7 @@ export function InterviewProvider({ children }) {
     persona: "Friendly Startup",
     transcriptEntries: [],
     videoBlobUrl: null,
+    report: null,
   });
 
   const value = useMemo(

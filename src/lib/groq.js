@@ -139,4 +139,15 @@ export async function generateInterviewQuestions({
   }
 }
 
+export async function generateContent(systemPrompt, userPrompt, options = {}) {
+  const { maxTokens = 1800 } = options;
+  const { text } = await createGroqChatCompletion({
+    system: systemPrompt,
+    user: userPrompt,
+    maxTokens,
+  });
+
+  return text;
+}
+
 export { createGroqChatCompletion, parseJsonObject };
