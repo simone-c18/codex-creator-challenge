@@ -38,6 +38,7 @@ function InterviewPage() {
   const [processingAnswer, setProcessingAnswer] = useState(false);
   const [sessionError, setSessionError] = useState("");
   const [isEnding, setIsEnding] = useState(false);
+  const [pageError, setPageError] = useState("");
   const answeredQuestionCount = useMemo(
     () =>
       new Set(
@@ -144,8 +145,17 @@ function InterviewPage() {
     setSttSupported(true);
 
     return () => {
-      recognition.stop();
-      recognitionRef.current = null;
+      try {
+        if (recognitionRef.current === recognition) {
+          recognitionRef.current = null;
+        }
+
+        if (typeof recognition.stop === "function") {
+          recognition.stop();
+        }
+      } catch (error) {
+        console.error("Speech recognition cleanup failed:", error);
+      }
     };
   }, [questions.length]);
 
@@ -176,26 +186,36 @@ function InterviewPage() {
   };
 
   const speakPrompt = (prompt) => {
-    stopRecognition();
-    setStatus("asking");
-    setInterviewerState("Speaking");
-    setActivePrompt(prompt);
-    activePromptRef.current = prompt;
+    try {
+      stopRecognition();
+      setStatus("asking");
+      setInterviewerState("Speaking");
+      setActivePrompt(prompt);
+      activePromptRef.current = prompt;
 
-    if (!("speechSynthesis" in window) || typeof SpeechSynthesisUtterance === "undefined") {
+      if (
+        typeof window === "undefined" ||
+        !("speechSynthesis" in window) ||
+        typeof SpeechSynthesisUtterance === "undefined"
+      ) {
+        startRecognition();
+        return;
+      }
+
+      window.speechSynthesis.cancel();
+      const utterance = new SpeechSynthesisUtterance(prompt);
+      utterance.onend = () => {
+        startRecognition();
+      };
+      utterance.onerror = () => {
+        startRecognition();
+      };
+      window.speechSynthesis.speak(utterance);
+    } catch (error) {
+      console.error("Interview prompt speech failed:", error);
+      setSessionError("Voice playback is unavailable in this browser. You can still continue.");
       startRecognition();
-      return;
     }
-
-    window.speechSynthesis.cancel();
-    const utterance = new SpeechSynthesisUtterance(prompt);
-    utterance.onend = () => {
-      startRecognition();
-    };
-    utterance.onerror = () => {
-      startRecognition();
-    };
-    window.speechSynthesis.speak(utterance);
   };
 
   useEffect(() => {
@@ -224,16 +244,23 @@ function InterviewPage() {
         }
 
         if (typeof MediaRecorder !== "undefined") {
-          const recorder = MediaRecorder.isTypeSupported?.("video/webm")
-            ? new MediaRecorder(stream, { mimeType: "video/webm" })
-            : new MediaRecorder(stream);
-          recorder.ondataavailable = (event) => {
-            if (event.data.size > 0) {
-              recordingChunksRef.current.push(event.data);
-            }
-          };
-          recorder.start();
-          mediaRecorderRef.current = recorder;
+          try {
+            const recorder = MediaRecorder.isTypeSupported?.("video/webm")
+              ? new MediaRecorder(stream, { mimeType: "video/webm" })
+              : new MediaRecorder(stream);
+            recorder.ondataavailable = (event) => {
+              if (event.data.size > 0) {
+                recordingChunksRef.current.push(event.data);
+              }
+            };
+            recorder.start();
+            mediaRecorderRef.current = recorder;
+          } catch (error) {
+            console.error("MediaRecorder setup failed:", error);
+            setSessionError(
+              "Video recording is unavailable in this browser, but the interview can still continue.",
+            );
+          }
         }
 
         speakPrompt(questions[0].question);
@@ -251,10 +278,20 @@ function InterviewPage() {
     return () => {
       sessionEndedRef.current = true;
       stopRecognition();
-      window.speechSynthesis.cancel();
 
-      if (mediaRecorderRef.current?.state !== "inactive") {
-        mediaRecorderRef.current.stop();
+      if (typeof window !== "undefined" && "speechSynthesis" in window) {
+        window.speechSynthesis.cancel();
+      }
+
+      const recorder = mediaRecorderRef.current;
+      mediaRecorderRef.current = null;
+
+      if (recorder && recorder.state !== "inactive") {
+        try {
+          recorder.stop();
+        } catch (error) {
+          console.error("MediaRecorder cleanup failed:", error);
+        }
       }
 
       if (streamRef.current) {
@@ -263,6 +300,26 @@ function InterviewPage() {
       }
     };
   }, [questions]);
+
+  useEffect(() => {
+    const handleUnhandledError = (event) => {
+      console.error("Interview page runtime error:", event.error || event.message);
+      setPageError("The interview page hit a browser runtime error. Please refresh and try again.");
+    };
+
+    const handleUnhandledRejection = (event) => {
+      console.error("Interview page unhandled promise rejection:", event.reason);
+      setPageError("The interview page hit a browser runtime error. Please refresh and try again.");
+    };
+
+    window.addEventListener("error", handleUnhandledError);
+    window.addEventListener("unhandledrejection", handleUnhandledRejection);
+
+    return () => {
+      window.removeEventListener("error", handleUnhandledError);
+      window.removeEventListener("unhandledrejection", handleUnhandledRejection);
+    };
+  }, []);
 
   const persistInterviewState = (nextEntries, videoBlobUrl = interviewState.videoBlobUrl) => {
     setInterviewState((current) => ({
@@ -390,6 +447,23 @@ function InterviewPage() {
 
   if (!questions.length) {
     return <Navigate to="/setup" replace />;
+  }
+
+  if (pageError) {
+    return (
+      <PageShell
+        eyebrow="Interview"
+        title="Interview setup hit a browser error"
+        description="The page could not finish initializing cleanly, but the app is still running."
+      >
+        <div className="rounded-[1.5rem] border border-coral/20 bg-coral/10 p-5 text-coral">
+          <p className="text-base font-semibold">{pageError}</p>
+          <p className="mt-3 text-sm leading-7">
+            Open the browser console and share the latest error if this keeps happening.
+          </p>
+        </div>
+      </PageShell>
+    );
   }
 
   const statusStyles = {
