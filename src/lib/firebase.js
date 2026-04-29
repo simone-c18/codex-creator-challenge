@@ -7,6 +7,7 @@ import {
   createUserWithEmailAndPassword,
   signOut,
 } from "firebase/auth";
+import { getFirestore } from "firebase/firestore";
 
 const firebaseConfig = {
   apiKey: import.meta.env.VITE_FIREBASE_API_KEY,
@@ -19,6 +20,7 @@ const firebaseConfig = {
 
 const app = initializeApp(firebaseConfig);
 const auth = getAuth(app);
+const db = getFirestore(app);
 const googleProvider = new GoogleAuthProvider();
 
 async function signInWithGoogle() {
@@ -37,4 +39,12 @@ async function signOutUser() {
   return signOut(auth);
 }
 
-export { app, auth, signInWithGoogle, signInWithEmail, signUpWithEmail, signOutUser };
+export {
+  app,
+  auth,
+  db,
+  signInWithGoogle,
+  signInWithEmail,
+  signUpWithEmail,
+  signOutUser,
+};

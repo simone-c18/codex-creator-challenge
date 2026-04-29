@@ -1,19 +1,33 @@
-import { useMemo, useState } from "react";
+import { lazy, Suspense, useEffect, useMemo, useRef, useState } from "react";
 import { Link, Navigate } from "react-router-dom";
-import {
-  PolarAngleAxis,
-  PolarGrid,
-  Radar,
-  RadarChart,
-  ResponsiveContainer,
-} from "recharts";
+import toast from "react-hot-toast";
+import ChartLoadingCard from "../components/ChartLoadingCard";
 import PageShell from "../components/PageShell";
+import { useAuth } from "../context/AuthContext";
 import { useInterview } from "../context/InterviewContext";
+import { db } from "../lib/firebase";
+import { addDoc, collection, serverTimestamp } from "firebase/firestore";
+
+const ResultsRadarChart = lazy(() => import("../components/ResultsRadarChart"));
 
 function ResultsPage() {
-  const { interviewState } = useInterview();
-  const { report, transcriptEntries = [], videoBlobUrl } = interviewState;
+  const { currentUser } = useAuth();
+  const { interviewState, setInterviewState } = useInterview();
+  const {
+    report,
+    transcriptEntries = [],
+    videoBlobUrl,
+    questions = [],
+    interviewType,
+    persona,
+    roleTitle,
+    jd,
+    currentSessionSaved,
+  } = interviewState;
   const [openCard, setOpenCard] = useState(null);
+  const [exporting, setExporting] = useState(false);
+  const reportRef = useRef(null);
+  const saveStartedRef = useRef(false);
 
   const scoreData = useMemo(() => {
     if (!report?.scores) {
@@ -32,6 +46,109 @@ function ResultsPage() {
   if (!report) {
     return <Navigate to="/processing" replace />;
   }
+
+  useEffect(() => {
+    if (!currentUser?.uid || currentSessionSaved || !report) {
+      return;
+    }
+
+    if (saveStartedRef.current) {
+      return;
+    }
+
+    saveStartedRef.current = true;
+
+    let cancelled = false;
+
+    const saveSession = async () => {
+      try {
+        await addDoc(collection(db, "sessions"), {
+          userId: currentUser.uid,
+          createdAt: serverTimestamp(),
+          roleTitle:
+            roleTitle ||
+            jd
+              .split("\n")
+              .map((line) => line.trim())
+              .find(Boolean) ||
+            "Untitled Role",
+          interviewType,
+          overall_grade: report.overall_grade,
+          scores: report.scores,
+          transcript: transcriptEntries,
+          report,
+          persona,
+          questions,
+          jd,
+        });
+
+        if (!cancelled) {
+          setInterviewState((current) => ({
+            ...current,
+            currentSessionSaved: true,
+          }));
+          toast.success("Session saved successfully");
+        }
+      } catch (error) {
+        if (!cancelled) {
+          saveStartedRef.current = false;
+          toast.error(error?.message || "Unable to save session.");
+        }
+      }
+    };
+
+    saveSession();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [
+    currentSessionSaved,
+    currentUser?.uid,
+    interviewType,
+    jd,
+    persona,
+    questions,
+    report,
+    roleTitle,
+    setInterviewState,
+    transcriptEntries,
+  ]);
+
+  const handleExport = async () => {
+    if (!reportRef.current || exporting) {
+      return;
+    }
+
+    setExporting(true);
+
+    try {
+      const [{ default: html2canvas }, { default: jsPDF }] = await Promise.all([
+        import("html2canvas"),
+        import("jspdf"),
+      ]);
+      const canvas = await html2canvas(reportRef.current, {
+        scale: 2,
+        backgroundColor: "#f7fbfc",
+      });
+      const imageData = canvas.toDataURL("image/png");
+      const pdf = new jsPDF({
+        orientation: "p",
+        unit: "px",
+        format: "a4",
+      });
+      const pageWidth = pdf.internal.pageSize.getWidth();
+      const pageHeight = (canvas.height * pageWidth) / canvas.width;
+      pdf.addImage(imageData, "PNG", 0, 0, pageWidth, pageHeight);
+      const today = new Date().toISOString().slice(0, 10);
+      pdf.save(`interview-report-${today}.pdf`);
+      toast.success("PDF export complete");
+    } catch (error) {
+      toast.error(error?.message || "Unable to export PDF.");
+    } finally {
+      setExporting(false);
+    }
+  };
 
   const gradeColor =
     report.overall_grade === "A"
@@ -54,6 +171,7 @@ function ResultsPage() {
       title="Review the coaching report"
       description="This report blends overall scoring, transcript annotations, and question-level critique so you can see both the pattern and the detail."
     >
+      <div ref={reportRef}>
       <section className="rounded-[1.75rem] border border-ink/10 bg-white p-6 text-center shadow-panel">
         <p className="text-sm font-semibold uppercase tracking-[0.2em] text-coral">
           Section 1 — Grade & Summary
@@ -70,21 +188,9 @@ function ResultsPage() {
         <p className="text-sm font-semibold uppercase tracking-[0.2em] text-teal">
           Section 2 — Radar Chart
         </p>
-        <div className="mt-6 h-[340px] w-full rounded-[1.5rem] bg-mist p-4">
-          <ResponsiveContainer width="100%" height="100%">
-            <RadarChart data={scoreData}>
-              <PolarGrid stroke="#c8d6df" />
-              <PolarAngleAxis dataKey="subject" tick={{ fill: "#132238", fontSize: 12 }} />
-              <Radar
-                name="Score"
-                dataKey="value"
-                stroke="#ff7a59"
-                fill="#ff7a59"
-                fillOpacity={0.35}
-              />
-            </RadarChart>
-          </ResponsiveContainer>
-        </div>
+        <Suspense fallback={<ChartLoadingCard message="Loading results chart…" />}>
+          <ResultsRadarChart scoreData={scoreData} />
+        </Suspense>
       </section>
 
       <section className="mt-6 rounded-[1.75rem] border border-ink/10 bg-white p-6 shadow-panel">
@@ -143,6 +249,7 @@ function ResultsPage() {
           </div>
         ) : null}
       </section>
+      </div>
 
       <section className="mt-6 rounded-[1.75rem] border border-ink/10 bg-white p-6 shadow-panel">
         <p className="text-sm font-semibold uppercase tracking-[0.2em] text-teal">
@@ -198,6 +305,14 @@ function ResultsPage() {
       >
         Back to dashboard
       </Link>
+      <button
+        type="button"
+        onClick={handleExport}
+        disabled={exporting}
+        className="ml-3 mt-8 inline-flex rounded-full bg-teal px-5 py-3 text-sm font-semibold text-white transition hover:bg-teal/90 disabled:cursor-not-allowed disabled:bg-teal/50"
+      >
+        {exporting ? "Exporting…" : "Download Report"}
+      </button>
     </PageShell>
   );
 }

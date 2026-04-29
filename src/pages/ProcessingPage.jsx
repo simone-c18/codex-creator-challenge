@@ -1,12 +1,13 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import toast from "react-hot-toast";
 import { Navigate, useNavigate } from "react-router-dom";
 import PageShell from "../components/PageShell";
 import { useInterview } from "../context/InterviewContext";
 import { generateContent } from "../lib/groq";
 
 const stepItems = [
-  { label: "Reviewing your answers…", delay: 1500 },
-  { label: "Analyzing communication patterns…", delay: 2000 },
+  { label: "Reviewing your answers…", delay: 300 },
+  { label: "Analyzing communication patterns…", delay: 300 },
   { label: "Building your report…", delay: 0 },
 ];
 
@@ -23,6 +24,7 @@ function ProcessingPage() {
   const [activeStep, setActiveStep] = useState(0);
   const [loadingReport, setLoadingReport] = useState(false);
   const [error, setError] = useState("");
+  const runStartedRef = useRef(false);
 
   const answeredQuestions = useMemo(
     () => transcriptEntries.filter((entry) => entry.answer?.trim()),
@@ -30,6 +32,10 @@ function ProcessingPage() {
   );
 
   const buildReport = async () => {
+    if (loadingReport) {
+      return;
+    }
+
     setError("");
     setLoadingReport(true);
 
@@ -99,6 +105,7 @@ ${JSON.stringify(questions.map((q) => ({ id: q.id, intent: q.intent })), null, 2
       }));
       navigate("/results");
     } catch (reportError) {
+      toast.error(reportError.message || "Unable to build your report right now.");
       setError(reportError.message || "Unable to build your report right now.");
     } finally {
       setLoadingReport(false);
@@ -109,6 +116,12 @@ ${JSON.stringify(questions.map((q) => ({ id: q.id, intent: q.intent })), null, 2
     if (!answeredQuestions.length || report) {
       return undefined;
     }
+
+    if (runStartedRef.current) {
+      return undefined;
+    }
+
+    runStartedRef.current = true;
 
     let cancelled = false;
     let timeoutId;
@@ -135,6 +148,7 @@ ${JSON.stringify(questions.map((q) => ({ id: q.id, intent: q.intent })), null, 2
 
     return () => {
       cancelled = true;
+      runStartedRef.current = false;
       if (timeoutId) {
         window.clearTimeout(timeoutId);
       }

@@ -4,12 +4,15 @@ const InterviewContext = createContext(null);
 
 export function InterviewProvider({ children }) {
   const [interviewState, setInterviewState] = useState({
+    jd: "",
+    roleTitle: "",
     questions: [],
     interviewType: "Behavioral",
     persona: "Friendly Startup",
     transcriptEntries: [],
     videoBlobUrl: null,
     report: null,
+    currentSessionSaved: false,
   });
 
   const value = useMemo(

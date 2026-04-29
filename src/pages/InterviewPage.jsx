@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
+import toast from "react-hot-toast";
 import { Navigate, useNavigate } from "react-router-dom";
 import PageShell from "../components/PageShell";
 import { useInterview } from "../context/InterviewContext";
@@ -39,6 +40,7 @@ function InterviewPage() {
   const [sessionError, setSessionError] = useState("");
   const [isEnding, setIsEnding] = useState(false);
   const [pageError, setPageError] = useState("");
+  const [interviewReady, setInterviewReady] = useState(false);
   const answeredQuestionCount = useMemo(
     () =>
       new Set(
@@ -223,6 +225,10 @@ function InterviewPage() {
       return undefined;
     }
 
+    if (!interviewReady) {
+      return undefined;
+    }
+
     const setupMedia = async () => {
       if (!navigator.mediaDevices?.getUserMedia) {
         setCameraStatus("denied");
@@ -299,7 +305,7 @@ function InterviewPage() {
         streamRef.current = null;
       }
     };
-  }, [questions]);
+  }, [interviewReady, questions]);
 
   useEffect(() => {
     const handleUnhandledError = (event) => {
@@ -422,6 +428,7 @@ function InterviewPage() {
         return;
       }
     } catch (error) {
+      toast.error(error?.message || "Unable to evaluate follow-up logic right now.");
       const fallbackFollowUp = currentQuestionRef.current.follow_ups?.[0];
 
       if (fallbackFollowUp) {
@@ -674,6 +681,65 @@ function InterviewPage() {
           </section>
         </div>
       </div>
+
+      {!interviewReady ? (
+        <div className="fixed inset-0 z-40 flex items-center justify-center bg-ink/45 px-4 backdrop-blur-sm">
+          <div className="w-full max-w-2xl rounded-[2rem] border border-white/70 bg-white/90 p-8 shadow-panel backdrop-blur md:p-10">
+            <p className="text-sm font-semibold uppercase tracking-[0.3em] text-coral">
+              Ready Check
+            </p>
+            <h2 className="mt-4 font-display text-4xl font-semibold text-ink">
+              Begin the interview when you’re settled
+            </h2>
+            <p className="mt-4 text-base leading-8 text-ink/72">
+              Once you start, the interviewer will begin speaking the first question right away.
+              Take a breath, get your notes and camera framing where you want them, then begin when ready.
+            </p>
+            <div className="mt-6 grid gap-4 sm:grid-cols-3">
+              <div className="rounded-[1.5rem] bg-mist p-4">
+                <p className="text-xs font-semibold uppercase tracking-[0.2em] text-teal">
+                  Type
+                </p>
+                <p className="mt-2 text-base font-semibold text-ink">
+                  {interviewState.interviewType}
+                </p>
+              </div>
+              <div className="rounded-[1.5rem] bg-mist p-4">
+                <p className="text-xs font-semibold uppercase tracking-[0.2em] text-teal">
+                  Persona
+                </p>
+                <p className="mt-2 text-base font-semibold text-ink">
+                  {interviewState.persona}
+                </p>
+              </div>
+              <div className="rounded-[1.5rem] bg-mist p-4">
+                <p className="text-xs font-semibold uppercase tracking-[0.2em] text-teal">
+                  Questions
+                </p>
+                <p className="mt-2 text-base font-semibold text-ink">
+                  {questions.length}
+                </p>
+              </div>
+            </div>
+            <div className="mt-8 flex flex-col gap-3 sm:flex-row">
+              <button
+                type="button"
+                onClick={() => navigate("/setup")}
+                className="rounded-full border border-ink/10 bg-white px-5 py-3 text-sm font-semibold text-ink transition hover:border-teal hover:text-teal"
+              >
+                Back to setup
+              </button>
+              <button
+                type="button"
+                onClick={() => setInterviewReady(true)}
+                className="rounded-full bg-coral px-5 py-3 text-sm font-semibold text-white transition hover:bg-coral/90"
+              >
+                Begin interview
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
     </PageShell>
   );
 }

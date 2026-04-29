@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import toast from "react-hot-toast";
 import { useNavigate } from "react-router-dom";
 import PageShell from "../components/PageShell";
 import { useInterview } from "../context/InterviewContext";
@@ -30,7 +31,7 @@ function SetupPage() {
   const { interviewState, setInterviewState } = useInterview();
   const videoRef = useRef(null);
   const streamRef = useRef(null);
-  const [jd, setJd] = useState("");
+  const [jd, setJd] = useState(interviewState.jd || "");
   const [interviewType, setInterviewType] = useState(
     interviewState.interviewType || "Behavioral",
   );
@@ -114,16 +115,26 @@ function SetupPage() {
         persona,
       });
 
+      const roleTitle =
+        jd
+          .split("\n")
+          .map((line) => line.trim())
+          .find(Boolean) || "Untitled Role";
+
       setInterviewState({
+        jd,
+        roleTitle,
         questions,
         interviewType,
         persona,
         transcriptEntries: [],
         videoBlobUrl: null,
         report: null,
+        currentSessionSaved: false,
       });
       navigate("/interview");
     } catch (error) {
+      toast.error(error?.message || "Unable to generate questions right now.");
       setSubmitError(
         error?.message || "Unable to generate questions right now. Please try again.",
       );
