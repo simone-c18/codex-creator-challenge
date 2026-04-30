@@ -479,6 +479,78 @@ function InterviewPage() {
     processing: "bg-coral/15 text-coral",
   };
 
+  if (!interviewReady) {
+    return (
+      <PageShell
+        eyebrow="Interview"
+        title="Begin when you're settled"
+        description="Set your notes, camera framing, and posture first. The interviewer starts speaking the moment you begin."
+      >
+        <div className="xl:flex xl:h-[calc(100svh-16rem)] xl:min-h-0 xl:flex-col xl:justify-center">
+          <section className="mx-auto w-full max-w-4xl rounded-[1.5rem] border border-ink/10 bg-white p-5 shadow-panel sm:p-6 lg:p-8">
+            <div className="flex flex-col gap-6 lg:grid lg:grid-cols-[1.15fr_0.85fr] lg:items-start">
+              <div>
+                <p className="text-xs font-semibold uppercase tracking-[0.28em] text-coral sm:text-sm">
+                  Ready Check
+                </p>
+                <h2 className="mt-3 font-display text-[1.9rem] font-semibold leading-tight text-ink sm:text-[2.35rem]">
+                  Begin the interview when you&apos;re ready
+                </h2>
+                <p className="mt-3 max-w-2xl text-sm leading-7 text-ink/72 sm:text-base sm:leading-8">
+                  Once you start, the interviewer will begin speaking the first question right away.
+                  Take a breath, get your notes and camera framing where you want them, then begin when ready.
+                </p>
+                <div className="mt-6 flex flex-col gap-3 sm:flex-row">
+                  <button
+                    type="button"
+                    onClick={() => navigate("/setup")}
+                    className="rounded-full border border-ink/10 bg-white px-5 py-3 text-sm font-semibold text-ink transition hover:border-teal hover:text-teal"
+                  >
+                    Back to setup
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setInterviewReady(true)}
+                    className="rounded-full bg-coral px-5 py-3 text-sm font-semibold text-white transition hover:bg-coral/90"
+                  >
+                    Begin interview
+                  </button>
+                </div>
+              </div>
+
+              <div className="grid gap-3 sm:grid-cols-3 lg:grid-cols-1">
+                <div className="rounded-[1.5rem] bg-mist p-4">
+                  <p className="text-xs font-semibold uppercase tracking-[0.2em] text-teal">
+                    Type
+                  </p>
+                  <p className="mt-2 text-base font-semibold text-ink">
+                    {interviewState.interviewType}
+                  </p>
+                </div>
+                <div className="rounded-[1.5rem] bg-mist p-4">
+                  <p className="text-xs font-semibold uppercase tracking-[0.2em] text-teal">
+                    Persona
+                  </p>
+                  <p className="mt-2 text-base font-semibold text-ink">
+                    {interviewState.persona}
+                  </p>
+                </div>
+                <div className="rounded-[1.5rem] bg-mist p-4">
+                  <p className="text-xs font-semibold uppercase tracking-[0.2em] text-teal">
+                    Questions
+                  </p>
+                  <p className="mt-2 text-base font-semibold text-ink">
+                    {questions.length}
+                  </p>
+                </div>
+              </div>
+            </div>
+          </section>
+        </div>
+      </PageShell>
+    );
+  }
+
   return (
     <PageShell
       eyebrow="Interview"
@@ -687,64 +759,6 @@ function InterviewPage() {
         </div>
       </div>
 
-      {!interviewReady ? (
-        <div className="fixed inset-0 z-40 flex items-center justify-center bg-ink/45 px-4 backdrop-blur-sm">
-          <div className="w-full max-w-xl rounded-[1.75rem] border border-white/70 bg-white/90 p-6 shadow-panel backdrop-blur sm:p-8">
-            <p className="text-xs font-semibold uppercase tracking-[0.28em] text-coral sm:text-sm">
-              Ready Check
-            </p>
-            <h2 className="mt-3 font-display text-[1.9rem] font-semibold leading-tight text-ink sm:text-[2.35rem]">
-              Begin the interview when you’re settled
-            </h2>
-            <p className="mt-3 text-sm leading-7 text-ink/72 sm:text-base sm:leading-8">
-              Once you start, the interviewer will begin speaking the first question right away.
-              Take a breath, get your notes and camera framing where you want them, then begin when ready.
-            </p>
-            <div className="mt-5 grid gap-3 sm:grid-cols-3">
-              <div className="rounded-[1.5rem] bg-mist p-4">
-                <p className="text-xs font-semibold uppercase tracking-[0.2em] text-teal">
-                  Type
-                </p>
-                <p className="mt-2 text-base font-semibold text-ink">
-                  {interviewState.interviewType}
-                </p>
-              </div>
-              <div className="rounded-[1.5rem] bg-mist p-4">
-                <p className="text-xs font-semibold uppercase tracking-[0.2em] text-teal">
-                  Persona
-                </p>
-                <p className="mt-2 text-base font-semibold text-ink">
-                  {interviewState.persona}
-                </p>
-              </div>
-              <div className="rounded-[1.5rem] bg-mist p-4">
-                <p className="text-xs font-semibold uppercase tracking-[0.2em] text-teal">
-                  Questions
-                </p>
-                <p className="mt-2 text-base font-semibold text-ink">
-                  {questions.length}
-                </p>
-              </div>
-            </div>
-            <div className="mt-6 flex flex-col gap-3 sm:flex-row">
-              <button
-                type="button"
-                onClick={() => navigate("/setup")}
-                className="rounded-full border border-ink/10 bg-white px-5 py-3 text-sm font-semibold text-ink transition hover:border-teal hover:text-teal"
-              >
-                Back to setup
-              </button>
-              <button
-                type="button"
-                onClick={() => setInterviewReady(true)}
-                className="rounded-full bg-coral px-5 py-3 text-sm font-semibold text-white transition hover:bg-coral/90"
-              >
-                Begin interview
-              </button>
-            </div>
-          </div>
-        </div>
-      ) : null}
     </PageShell>
   );
 }

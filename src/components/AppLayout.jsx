@@ -21,7 +21,7 @@ function AppLayout() {
           <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
             <div>
               <p className="text-xs font-semibold uppercase tracking-[0.28em] text-teal sm:text-sm">
-                AI Interview Coach
+                Interviewly
               </p>
               <h1 className="font-display text-[2rem] font-semibold leading-tight sm:text-[2.35rem]">
                 Practice smarter, reflect faster

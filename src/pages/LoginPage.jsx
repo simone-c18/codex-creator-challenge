@@ -56,7 +56,7 @@ function LoginPage() {
       <div className="grid w-full max-w-6xl gap-6 lg:grid-cols-[1.15fr_0.85fr]">
         <section className="animate-rise rounded-[2rem] border border-white/70 bg-ink p-8 text-white shadow-panel md:p-10">
           <p className="text-sm font-semibold uppercase tracking-[0.3em] text-gold">
-            AI Interview Coach
+            Interviewly
           </p>
           <h1 className="mt-4 font-display text-4xl font-semibold leading-tight md:text-5xl">
             Turn practice interviews into focused, high-signal coaching.
