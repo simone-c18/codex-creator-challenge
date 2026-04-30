@@ -20,6 +20,7 @@ function ProcessingPage() {
     interviewType,
     persona,
     report,
+    resumeText,
   } = interviewState;
   const [activeStep, setActiveStep] = useState(0);
   const [loadingReport, setLoadingReport] = useState(false);
@@ -71,7 +72,8 @@ Return ONLY a valid JSON object — no markdown, no backticks:
       "question": string,
       "answer": string,
       "grade": "A" | "B" | "C" | "D" | "F",
-      "feedback": string
+      "feedback": string,
+      "resume_used": boolean
     }
   ]
 }
@@ -82,16 +84,27 @@ Rules:
 - annotations must cover at least 3 moments across the transcript
 - type "positive" = something done well, "warning" = something to improve, "info" = neutral observation
 - question_feedback must have one entry per question answered
+- If a resume was provided, note in question_feedback whether the candidate successfully drew on the specific experience referenced. Add a "resume_used": true | false field to each question_feedback entry indicating whether the candidate actually referenced the resume point in their answer.
 - Be specific — reference actual words or phrases from the candidate's answers`;
 
     const userPrompt = `Interview Type: ${interviewType}
 Persona: ${persona}
 
+${resumeText ? `Candidate Resume:\n${resumeText}\n` : ""}
+
 Full Transcript:
 ${JSON.stringify(transcriptEntries, null, 2)}
 
 Question Intents:
-${JSON.stringify(questions.map((q) => ({ id: q.id, intent: q.intent })), null, 2)}`;
+${JSON.stringify(
+  questions.map((q) => ({
+    id: q.id,
+    intent: q.intent,
+    resume_reference: q.resume_reference,
+  })),
+  null,
+  2,
+)}`;
 
     try {
       const text = await generateContent(systemPrompt, userPrompt, {
@@ -169,12 +182,12 @@ ${JSON.stringify(questions.map((q) => ({ id: q.id, intent: q.intent })), null, 2
       title="Turning your interview into a usable coaching report"
       description="We’re moving through the same flow a real coach would use: reviewing your answers, spotting patterns, and shaping a report you can actually act on."
     >
-      <div className="grid gap-6 lg:grid-cols-[0.9fr_1.1fr]">
-        <section className="rounded-[1.75rem] border border-ink/10 bg-ink p-6 text-white shadow-panel">
+      <div className="grid gap-5 xl:h-[calc(100svh-15.5rem)] xl:grid-cols-[0.88fr_1.12fr] xl:overflow-hidden">
+        <section className="rounded-[1.5rem] border border-ink/10 bg-ink p-5 text-white shadow-panel sm:p-6">
           <p className="text-sm font-semibold uppercase tracking-[0.2em] text-gold">
             Analysis engine
           </p>
-          <h3 className="mt-2 text-3xl font-bold">
+          <h3 className="mt-2 text-2xl font-bold sm:text-3xl">
             Building your interview review
           </h3>
           <div className="mt-8 space-y-6">
@@ -217,7 +230,7 @@ ${JSON.stringify(questions.map((q) => ({ id: q.id, intent: q.intent })), null, 2
           </div>
         </section>
 
-        <section className="rounded-[1.75rem] border border-ink/10 bg-white p-6 shadow-panel">
+        <section className="rounded-[1.5rem] border border-ink/10 bg-white p-5 shadow-panel sm:p-6 xl:min-h-0 xl:overflow-y-auto">
           <p className="text-sm font-semibold uppercase tracking-[0.2em] text-teal">
             Session snapshot
           </p>

@@ -485,15 +485,15 @@ function InterviewPage() {
       title="Stay present and answer like it counts"
       description="Your interviewer will ask each question aloud, listen for your response, and decide whether to probe deeper or move on."
     >
-      <div className="flex items-center justify-end">
-        <p className="rounded-full bg-white px-4 py-2 text-xs font-semibold uppercase tracking-[0.2em] text-ink/50">
+      <div className="flex items-center justify-start xl:justify-end">
+        <p className="rounded-full bg-white px-3.5 py-2 text-[11px] font-semibold uppercase tracking-[0.2em] text-ink/50 sm:px-4 sm:text-xs">
           Question {Math.min(currentQuestionIndex + 1, questions.length)} of {questions.length}
         </p>
       </div>
 
-      <div className="mt-6 grid gap-6 lg:grid-cols-[1.2fr_0.8fr]">
+      <div className="mt-5 grid gap-5 xl:h-[calc(100svh-15.5rem)] xl:overflow-hidden 2xl:grid-cols-[minmax(0,1.1fr)_minmax(20rem,0.9fr)]">
         <div className="space-y-6">
-          <section className="rounded-[1.75rem] border border-ink/10 bg-ink p-5 text-white shadow-panel">
+          <section className="rounded-[1.5rem] border border-ink/10 bg-ink p-4 text-white shadow-panel sm:p-5">
             <div className="overflow-hidden rounded-[1.5rem] border border-white/10 bg-white/10">
               {cameraStatus === "granted" ? (
                 <video
@@ -501,10 +501,10 @@ function InterviewPage() {
                   autoPlay
                   playsInline
                   muted
-                  className="aspect-video w-full -scale-x-100 object-cover"
+                  className="aspect-[16/10] max-h-[44vh] w-full -scale-x-100 object-cover xl:max-h-[50vh]"
                 />
               ) : (
-                <div className="flex aspect-video items-center justify-center px-6 text-center text-sm leading-7 text-white/70">
+                <div className="flex aspect-[16/10] max-h-[44vh] items-center justify-center px-6 text-center text-sm leading-7 text-white/70 xl:max-h-[50vh]">
                   {cameraStatus === "denied"
                     ? cameraError
                     : "Starting your camera and recording setup..."}
@@ -530,18 +530,18 @@ function InterviewPage() {
               </span>
             </div>
 
-            <div className="mt-5 rounded-[1.5rem] border border-white/10 bg-white/10 p-5">
+            <div className="mt-4 rounded-[1.5rem] border border-white/10 bg-white/10 p-4 sm:p-5">
               <p className="text-xs font-semibold uppercase tracking-[0.2em] text-gold">
                 Live transcript
               </p>
-              <p className="mt-3 min-h-24 text-base leading-8 text-white/85">
+              <p className="mt-3 min-h-20 text-sm leading-7 text-white/85 sm:text-base sm:leading-8">
                 {(sttSupported ? liveTranscript : manualAnswer) ||
                   "Your answer will appear here once the interviewer finishes asking the question."}
               </p>
             </div>
 
             {!sttSupported ? (
-              <div className="mt-5 rounded-[1.5rem] border border-white/10 bg-white/10 p-5">
+              <div className="mt-4 rounded-[1.5rem] border border-white/10 bg-white/10 p-4 sm:p-5">
                 <p className="text-sm font-semibold uppercase tracking-[0.2em] text-gold">
                   Speech recognition unavailable
                 </p>
@@ -556,12 +556,12 @@ function InterviewPage() {
             ) : null}
 
             {sessionError ? (
-              <p className="mt-5 rounded-2xl border border-coral/20 bg-coral/10 px-4 py-3 text-sm text-coral">
+              <p className="mt-4 rounded-2xl border border-coral/20 bg-coral/10 px-4 py-3 text-sm text-coral">
                 {sessionError}
               </p>
             ) : null}
 
-            <div className="mt-5 flex flex-col gap-3 sm:flex-row">
+            <div className="mt-4 flex flex-col gap-3 sm:flex-row">
               <button
                 type="button"
                 onClick={handleAnswerSubmission}
@@ -584,14 +584,14 @@ function InterviewPage() {
           </section>
         </div>
 
-        <div className="space-y-6">
-          <section className="rounded-[1.75rem] border border-ink/10 bg-white p-5 shadow-panel">
+        <div className="space-y-5 xl:flex xl:min-h-0 xl:flex-col xl:overflow-hidden">
+          <section className="rounded-[1.5rem] border border-ink/10 bg-white p-4 shadow-panel sm:p-5 xl:flex xl:min-h-0 xl:flex-col">
             <div className="flex items-start justify-between gap-4">
               <div>
                 <p className="text-sm font-semibold uppercase tracking-[0.2em] text-coral">
                   AI interviewer
                 </p>
-                <h3 className="mt-2 text-2xl font-bold text-ink">
+                <h3 className="mt-2 text-xl font-bold text-ink sm:text-2xl">
                   {interviewState.persona}
                 </h3>
                 <p className="mt-2 text-sm leading-7 text-ink/65">
@@ -610,16 +610,21 @@ function InterviewPage() {
               </div>
             </div>
 
-            <div className="mt-6 rounded-[1.5rem] border border-ink/10 bg-mist p-5">
+            <div className="mt-5 rounded-[1.5rem] border border-ink/10 bg-mist p-4 sm:p-5">
               <p className="text-xs font-semibold uppercase tracking-[0.2em] text-ink/50">
                 Current prompt
               </p>
-              <p className="mt-3 text-xl font-semibold leading-9 text-ink">
+              <p className="mt-3 text-lg font-semibold leading-8 text-ink sm:text-xl sm:leading-9">
                 {activePrompt}
               </p>
+              {currentQuestion?.resume_reference ? (
+                <p className="mt-3 text-sm italic leading-7 text-ink/55">
+                  📄 Based on: "{currentQuestion.resume_reference}"
+                </p>
+              ) : null}
             </div>
 
-            <div className="mt-5 rounded-[1.5rem] border border-ink/10 bg-white p-5">
+            <div className="mt-4 rounded-[1.5rem] border border-ink/10 bg-white p-4 sm:p-5">
               <p className="text-xs font-semibold uppercase tracking-[0.2em] text-ink/50">
                 Question notes
               </p>
@@ -652,11 +657,11 @@ function InterviewPage() {
             </div>
           </section>
 
-          <section className="rounded-[1.75rem] border border-ink/10 bg-white p-5">
+          <section className="rounded-[1.5rem] border border-ink/10 bg-white p-4 sm:p-5 xl:flex xl:min-h-0 xl:flex-col">
             <p className="text-sm font-semibold uppercase tracking-[0.2em] text-teal">
               Transcript log
             </p>
-            <div className="mt-4 space-y-3">
+            <div className="mt-4 max-h-[28rem] space-y-3 overflow-y-auto pr-1 xl:min-h-0 xl:max-h-none xl:flex-1">
               {transcriptEntries.length ? (
                 transcriptEntries.map((entry, index) => (
                   <div
@@ -684,18 +689,18 @@ function InterviewPage() {
 
       {!interviewReady ? (
         <div className="fixed inset-0 z-40 flex items-center justify-center bg-ink/45 px-4 backdrop-blur-sm">
-          <div className="w-full max-w-2xl rounded-[2rem] border border-white/70 bg-white/90 p-8 shadow-panel backdrop-blur md:p-10">
-            <p className="text-sm font-semibold uppercase tracking-[0.3em] text-coral">
+          <div className="w-full max-w-xl rounded-[1.75rem] border border-white/70 bg-white/90 p-6 shadow-panel backdrop-blur sm:p-8">
+            <p className="text-xs font-semibold uppercase tracking-[0.28em] text-coral sm:text-sm">
               Ready Check
             </p>
-            <h2 className="mt-4 font-display text-4xl font-semibold text-ink">
+            <h2 className="mt-3 font-display text-[1.9rem] font-semibold leading-tight text-ink sm:text-[2.35rem]">
               Begin the interview when you’re settled
             </h2>
-            <p className="mt-4 text-base leading-8 text-ink/72">
+            <p className="mt-3 text-sm leading-7 text-ink/72 sm:text-base sm:leading-8">
               Once you start, the interviewer will begin speaking the first question right away.
               Take a breath, get your notes and camera framing where you want them, then begin when ready.
             </p>
-            <div className="mt-6 grid gap-4 sm:grid-cols-3">
+            <div className="mt-5 grid gap-3 sm:grid-cols-3">
               <div className="rounded-[1.5rem] bg-mist p-4">
                 <p className="text-xs font-semibold uppercase tracking-[0.2em] text-teal">
                   Type
@@ -721,7 +726,7 @@ function InterviewPage() {
                 </p>
               </div>
             </div>
-            <div className="mt-8 flex flex-col gap-3 sm:flex-row">
+            <div className="mt-6 flex flex-col gap-3 sm:flex-row">
               <button
                 type="button"
                 onClick={() => navigate("/setup")}

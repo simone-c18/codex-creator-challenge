@@ -1,9 +1,9 @@
 import { lazy, Suspense } from "react";
-import { AnimatePresence, motion } from "framer-motion";
-import { Navigate, Route, Routes, useLocation } from "react-router-dom";
+import { Navigate, Route, Routes } from "react-router-dom";
 import { Toaster } from "react-hot-toast";
 import AppLayout from "./components/AppLayout";
 import ErrorBoundary from "./components/ErrorBoundary";
+import PageTransition from "./components/PageTransition";
 import ProtectedRoute from "./components/ProtectedRoute";
 
 const DashboardPage = lazy(() => import("./pages/DashboardPage"));
@@ -32,33 +32,28 @@ function RouteLoadingFallback() {
 }
 
 function AnimatedRoutes() {
-  const location = useLocation();
-
   return (
     <Suspense fallback={<RouteLoadingFallback />}>
-      <AnimatePresence mode="wait">
-        <motion.div
-          key={location.pathname}
-          initial={{ opacity: 0, y: 18 }}
-          animate={{ opacity: 1, y: 0 }}
-          exit={{ opacity: 0, y: -18 }}
-          transition={{ duration: 0.3, ease: "easeOut" }}
-        >
-          <Routes location={location}>
-            <Route path="/login" element={<LoginPage />} />
-            <Route element={<ProtectedRoute />}>
-              <Route element={<AppLayout />}>
-                <Route path="/dashboard" element={<DashboardPage />} />
-                <Route path="/setup" element={<SetupPage />} />
-                <Route path="/interview" element={<InterviewPage />} />
-                <Route path="/processing" element={<ProcessingPage />} />
-                <Route path="/results" element={<ResultsPage />} />
-              </Route>
-            </Route>
-            <Route path="*" element={<Navigate to="/login" replace />} />
-          </Routes>
-        </motion.div>
-      </AnimatePresence>
+      <Routes>
+        <Route
+          path="/login"
+          element={
+            <PageTransition>
+              <LoginPage />
+            </PageTransition>
+          }
+        />
+        <Route element={<ProtectedRoute />}>
+          <Route element={<AppLayout />}>
+            <Route path="/dashboard" element={<DashboardPage />} />
+            <Route path="/setup" element={<SetupPage />} />
+            <Route path="/interview" element={<InterviewPage />} />
+            <Route path="/processing" element={<ProcessingPage />} />
+            <Route path="/results" element={<ResultsPage />} />
+          </Route>
+        </Route>
+        <Route path="*" element={<Navigate to="/login" replace />} />
+      </Routes>
     </Suspense>
   );
 }

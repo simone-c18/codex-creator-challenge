@@ -21,6 +21,10 @@ function ProtectedRoute() {
   }
 
   if (!currentUser) {
+    if (location.pathname === "/login") {
+      return null;
+    }
+
     return <Navigate to="/login" replace state={{ from: location }} />;
   }
 

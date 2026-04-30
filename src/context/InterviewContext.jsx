@@ -6,6 +6,8 @@ export function InterviewProvider({ children }) {
   const [interviewState, setInterviewState] = useState({
     jd: "",
     roleTitle: "",
+    resumeText: "",
+    resumeFilename: "",
     questions: [],
     interviewType: "Behavioral",
     persona: "Friendly Startup",

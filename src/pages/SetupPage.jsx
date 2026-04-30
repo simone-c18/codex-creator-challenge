@@ -113,6 +113,7 @@ function SetupPage() {
         jd,
         interviewType,
         persona,
+        resumeText: interviewState.resumeText,
       });
 
       const roleTitle =
@@ -124,6 +125,8 @@ function SetupPage() {
       setInterviewState({
         jd,
         roleTitle,
+        resumeText: interviewState.resumeText,
+        resumeFilename: interviewState.resumeFilename,
         questions,
         interviewType,
         persona,
@@ -149,16 +152,19 @@ function SetupPage() {
       title="Build your next interview session"
       description="Paste the target job description, choose the interview style and interviewer persona, then confirm camera and mic access before Groq generates a tailored seven-question mock."
     >
-      <form className="space-y-6" onSubmit={handleSubmit}>
-        <div className="grid gap-6 lg:grid-cols-[1.15fr_0.85fr]">
-          <div className="space-y-6">
-            <section className="rounded-[1.75rem] border border-ink/10 bg-mist p-5">
+      <form
+        className="space-y-6 xl:flex xl:h-[calc(100svh-15.5rem)] xl:min-h-0 xl:flex-col xl:overflow-hidden"
+        onSubmit={handleSubmit}
+      >
+        <div className="grid gap-5 xl:min-h-0 xl:flex-1 xl:grid-cols-[1.08fr_0.92fr] xl:overflow-hidden">
+          <div className="space-y-5 xl:min-h-0 xl:overflow-y-auto xl:pr-2">
+            <section className="rounded-[1.5rem] border border-ink/10 bg-mist p-4 sm:p-5">
               <div className="flex items-center justify-between gap-4">
                 <div>
                   <p className="text-sm font-semibold uppercase tracking-[0.2em] text-teal">
                     01. Job Description Input
                   </p>
-                  <h3 className="mt-2 text-2xl font-bold text-ink">
+                  <h3 className="mt-2 text-xl font-bold text-ink sm:text-2xl">
                     Paste the target role details
                   </h3>
                 </div>
@@ -175,16 +181,16 @@ function SetupPage() {
                   value={jd}
                   onChange={(event) => setJd(event.target.value)}
                   placeholder="Paste the full job description here…"
-                  className="min-h-40 w-full rounded-[1.5rem] border border-ink/10 bg-white px-4 py-4 text-base leading-7 text-ink outline-none transition focus:border-teal"
+                  className="min-h-36 w-full rounded-[1.5rem] border border-ink/10 bg-white px-4 py-4 text-base leading-7 text-ink outline-none transition focus:border-teal"
                 />
               </label>
             </section>
 
-            <section className="rounded-[1.75rem] border border-ink/10 bg-white p-5">
+            <section className="rounded-[1.5rem] border border-ink/10 bg-white p-4 sm:p-5">
               <p className="text-sm font-semibold uppercase tracking-[0.2em] text-coral">
                 02. Interview Type Selector
               </p>
-              <h3 className="mt-2 text-2xl font-bold text-ink">
+              <h3 className="mt-2 text-xl font-bold text-ink sm:text-2xl">
                 Choose the lens for your mock
               </h3>
               <div className="mt-5 flex flex-wrap gap-3">
@@ -210,11 +216,11 @@ function SetupPage() {
               </div>
             </section>
 
-            <section className="rounded-[1.75rem] border border-ink/10 bg-white p-5">
+            <section className="rounded-[1.5rem] border border-ink/10 bg-white p-4 sm:p-5">
               <p className="text-sm font-semibold uppercase tracking-[0.2em] text-coral">
                 03. Persona Picker
               </p>
-              <h3 className="mt-2 text-2xl font-bold text-ink">
+              <h3 className="mt-2 text-xl font-bold text-ink sm:text-2xl">
                 Pick the interviewer vibe
               </h3>
               <div className="mt-5 grid gap-4 sm:grid-cols-2">
@@ -233,7 +239,7 @@ function SetupPage() {
                           : "border-ink/10 bg-mist hover:border-teal/40 hover:bg-white",
                       ].join(" ")}
                     >
-                      <p className="text-lg font-bold text-ink">{entry.label}</p>
+                      <p className="text-base font-bold text-ink sm:text-lg">{entry.label}</p>
                       <p className="mt-2 text-sm leading-7 text-ink/70">
                         {entry.description}
                       </p>
@@ -241,11 +247,22 @@ function SetupPage() {
                   );
                 })}
               </div>
+              <div className="mt-5">
+                {interviewState.resumeText ? (
+                  <span className="inline-flex rounded-full bg-teal/10 px-4 py-2 text-sm font-semibold text-teal">
+                    ✓ Resume loaded — questions will be tailored to your background
+                  </span>
+                ) : (
+                  <p className="text-sm leading-7 text-ink/55">
+                    No resume uploaded — add one from your dashboard for personalized questions
+                  </p>
+                )}
+              </div>
             </section>
           </div>
 
-          <div className="space-y-6">
-            <section className="rounded-[1.75rem] border border-ink/10 bg-ink p-5 text-white">
+          <div className="space-y-5 xl:min-h-0 xl:overflow-y-auto xl:pr-1">
+            <section className="rounded-[1.5rem] border border-ink/10 bg-ink p-5 text-white">
               <p className="text-sm font-semibold uppercase tracking-[0.2em] text-gold">
                 04. Camera & Mic Permission Flow
               </p>
@@ -259,10 +276,10 @@ function SetupPage() {
                     autoPlay
                     playsInline
                     muted
-                    className="aspect-video w-full -scale-x-100 object-cover"
+                    className="aspect-[16/10] max-h-[28vh] w-full -scale-x-100 object-cover xl:max-h-[24vh]"
                   />
                 ) : (
-                  <div className="flex aspect-video items-center justify-center px-6 text-center text-sm leading-7 text-white/70">
+                  <div className="flex aspect-[16/10] max-h-[28vh] items-center justify-center px-6 text-center text-sm leading-7 text-white/70 xl:max-h-[24vh]">
                     {permissionStatus === "denied"
                       ? "Camera preview unavailable until permission is granted."
                       : "Requesting access to your camera and microphone..."}
@@ -303,7 +320,7 @@ function SetupPage() {
               ) : null}
             </section>
 
-            <section className="rounded-[1.75rem] border border-ink/10 bg-white p-5">
+            <section className="rounded-[1.5rem] border border-ink/10 bg-white p-5">
               <p className="text-sm font-semibold uppercase tracking-[0.2em] text-teal">
                 Session summary
               </p>

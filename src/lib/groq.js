@@ -1,4 +1,4 @@
-const SYSTEM_PROMPT = `You are an expert interview coach. Given a job description and interview type, generate exactly 7 interview questions tailored to the role.
+const SYSTEM_PROMPT = `You are an expert interview coach. Given a job description, interview type, and optionally a candidate's resume, generate exactly 7 interview questions tailored to the role and the candidate's specific background.
 
 Return ONLY a valid JSON object matching this schema — no markdown, no explanation, no backticks:
 {
@@ -6,10 +6,11 @@ Return ONLY a valid JSON object matching this schema — no markdown, no explana
     {
       "id": number,
       "question": string,
-      "category": "behavioral" | "technical" | "hr",
+      "category": "behavioral" | "technical" | "hr" | "resume",
       "difficulty": "easy" | "medium" | "hard",
       "follow_ups": [string, string],
-      "intent": string
+      "intent": string,
+      "resume_reference": string | null
     }
   ]
 }
@@ -19,7 +20,9 @@ Rules:
 - follow_ups must be natural continuations, not repetitions of the main question
 - intent should be one sentence describing what competency this question reveals
 - Tailor every question to the specific role and company in the JD — no generic questions
-- Keep all text concise: each question should usually be one sentence, each follow-up should be short, and intent should be under 18 words`;
+- If a resume is provided, at least 3 of the 7 questions must reference specific details from it — a past job, a named project, a listed skill, a gap, or an achievement
+- For resume-based questions, set category to "resume" and set resume_reference to the exact resume detail being referenced (e.g. "Led backend migration at Acme Corp, 2022")
+- If no resume is provided, set resume_reference to null for all questions and generate all 7 questions from the JD alone`;
 
 function getGroqApiKey() {
   const apiKey = import.meta.env.VITE_GROQ_API_KEY;
@@ -105,10 +108,21 @@ export async function generateInterviewQuestions({
   jd,
   interviewType,
   persona,
+  resumeText,
 }) {
   const { text, data } = await createGroqChatCompletion({
     system: SYSTEM_PROMPT,
-    user: `Job Description: ${jd}\n\nInterview Type: ${interviewType}\n\nPersona: ${persona}`,
+    user: `Job Description: ${jd}
+
+Interview Type: ${interviewType}
+
+Persona: ${persona}
+
+${
+  resumeText
+    ? `Candidate Resume:\n${resumeText}`
+    : "No resume provided — generate all questions from the job description only."
+}`,
     maxTokens: 1400,
   });
 
