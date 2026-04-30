@@ -11,6 +11,36 @@ const stepItems = [
   { label: "Building your report…", delay: 0 },
 ];
 
+function summarizeFrameLog(frameLog) {
+  const total = frameLog.length;
+  if (total === 0) {
+    return null;
+  }
+
+  const counts = frameLog.reduce((accumulator, entry) => {
+    accumulator[entry.status] = (accumulator[entry.status] || 0) + 1;
+    return accumulator;
+  }, {});
+
+  const goodPct = Math.round(((counts.good || 0) / total) * 100);
+  const awayCount = counts.no_face || 0;
+  const awaySeconds = awayCount * 2;
+
+  return {
+    good_percentage: goodPct,
+    away_seconds: awaySeconds,
+    too_far_count: counts.too_far || 0,
+    too_close_count: counts.too_close || 0,
+    off_center_count: counts.off_center || 0,
+    summary:
+      goodPct >= 80
+        ? "You maintained strong camera presence throughout."
+        : goodPct >= 60
+          ? "You were in frame most of the time — a few moments of drift."
+          : "You were frequently out of frame — practice looking directly at the camera.",
+  };
+}
+
 function ProcessingPage() {
   const navigate = useNavigate();
   const { interviewState, setInterviewState } = useInterview();
@@ -21,6 +51,8 @@ function ProcessingPage() {
     persona,
     report,
     resumeText,
+    frameLog = [],
+    frameSummary: existingFrameSummary = null,
   } = interviewState;
   const [activeStep, setActiveStep] = useState(0);
   const [loadingReport, setLoadingReport] = useState(false);
@@ -30,6 +62,10 @@ function ProcessingPage() {
   const answeredQuestions = useMemo(
     () => transcriptEntries.filter((entry) => entry.answer?.trim()),
     [transcriptEntries],
+  );
+  const frameSummary = useMemo(
+    () => existingFrameSummary || summarizeFrameLog(frameLog),
+    [existingFrameSummary, frameLog],
   );
 
   const buildReport = async () => {
@@ -92,6 +128,8 @@ Persona: ${persona}
 
 ${resumeText ? `Candidate Resume:\n${resumeText}\n` : ""}
 
+${frameSummary ? `Camera Presence: ${JSON.stringify(frameSummary)}\n` : ""}
+
 Full Transcript:
 ${JSON.stringify(transcriptEntries, null, 2)}
 
@@ -115,6 +153,7 @@ ${JSON.stringify(
       setInterviewState((current) => ({
         ...current,
         report: parsed,
+        frameSummary,
       }));
       navigate("/results");
     } catch (reportError) {
@@ -124,6 +163,15 @@ ${JSON.stringify(
       setLoadingReport(false);
     }
   };
+
+  useEffect(() => {
+    if (!existingFrameSummary && frameSummary) {
+      setInterviewState((current) => ({
+        ...current,
+        frameSummary,
+      }));
+    }
+  }, [existingFrameSummary, frameSummary, setInterviewState]);
 
   useEffect(() => {
     if (!answeredQuestions.length || report) {

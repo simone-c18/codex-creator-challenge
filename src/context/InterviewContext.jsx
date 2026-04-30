@@ -12,6 +12,8 @@ export function InterviewProvider({ children }) {
     interviewType: "Behavioral",
     persona: "Friendly Startup",
     transcriptEntries: [],
+    frameLog: [],
+    frameSummary: null,
     videoBlobUrl: null,
     report: null,
     currentSessionSaved: false,

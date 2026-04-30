@@ -20,6 +20,7 @@ function ResultsPage() {
     questions = [],
     interviewType,
     persona,
+    frameSummary,
     roleTitle,
     jd,
     currentSessionSaved,
@@ -224,6 +225,25 @@ function ResultsPage() {
                 <ResultsRadarChart scoreData={scoreData} />
               </Suspense>
             </section>
+
+            {frameSummary ? (
+              <section className="rounded-[1.5rem] border border-ink/10 bg-white p-5 shadow-panel sm:p-6">
+                <p className="text-sm font-semibold uppercase tracking-[0.2em] text-teal">
+                  Camera Presence
+                </p>
+                <div className="mt-5 flex gap-6">
+                  <div className="text-center">
+                    <p className="text-3xl font-bold text-ink">{frameSummary.good_percentage}%</p>
+                    <p className="mt-1 text-xs text-ink/50">Time in frame</p>
+                  </div>
+                  <div className="text-center">
+                    <p className="text-3xl font-bold text-ink">{frameSummary.away_seconds}s</p>
+                    <p className="mt-1 text-xs text-ink/50">Time away</p>
+                  </div>
+                </div>
+                <p className="mt-4 text-sm text-ink/65">{frameSummary.summary}</p>
+              </section>
+            ) : null}
 
             {videoBlobUrl ? (
               <section className="rounded-[1.5rem] border border-ink/10 bg-white p-4 shadow-panel">

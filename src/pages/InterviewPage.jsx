@@ -2,7 +2,9 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import toast from "react-hot-toast";
 import { Navigate, useNavigate } from "react-router-dom";
 import { useInterview } from "../context/InterviewContext";
+import { loadModels, detectFace } from "../utils/frameCheck";
 import { decideFollowUp } from "../lib/groqFollowUp";
+import { speakWhenReady, stopSpeaking } from "../utils/tts";
 
 function InterviewPage() {
   const navigate = useNavigate();
@@ -18,6 +20,9 @@ function InterviewPage() {
   const statusRef = useRef("asking");
   const processingAnswerRef = useRef(false);
   const sttSupportedRef = useRef(true);
+  const frameLogRef = useRef([]);
+  const frameCheckInterval = useRef(null);
+  const frameModelsLoadedRef = useRef(false);
   const questions = interviewState.questions?.length ? interviewState.questions : [];
   const [cameraStatus, setCameraStatus] = useState("idle");
   const [cameraError, setCameraError] = useState("");
@@ -29,6 +34,9 @@ function InterviewPage() {
   const [manualAnswer, setManualAnswer] = useState("");
   const [sttSupported, setSttSupported] = useState(true);
   const [isRecognitionActive, setIsRecognitionActive] = useState(false);
+  const [videoPreviewReady, setVideoPreviewReady] = useState(false);
+  const [frameCheckReady, setFrameCheckReady] = useState(false);
+  const [frameStatus, setFrameStatus] = useState("unavailable");
   const [transcriptEntries, setTranscriptEntries] = useState(
     interviewState.transcriptEntries || [],
   );
@@ -43,6 +51,42 @@ function InterviewPage() {
     [transcriptEntries],
   );
   const currentQuestion = questions[currentQuestionIndex] || null;
+  const frameMessages = {
+    good: { label: "✓ In frame", color: "bg-teal" },
+    no_face: { label: "⚠ Face not detected", color: "bg-coral" },
+    too_far: { label: "↔ Move closer", color: "bg-gold" },
+    too_close: { label: "↔ Move back", color: "bg-gold" },
+    off_center: { label: "↕ Center yourself", color: "bg-gold" },
+    unavailable: { label: "Camera check unavailable", color: "bg-ink/70" },
+  };
+
+  useEffect(() => {
+    let mounted = true;
+
+    const prepareModels = async () => {
+      try {
+        await loadModels();
+        if (mounted) {
+          frameModelsLoadedRef.current = true;
+          setFrameCheckReady(true);
+          setFrameStatus("no_face");
+        }
+      } catch (error) {
+        console.error("Face framing models failed to load:", error);
+        if (mounted) {
+          frameModelsLoadedRef.current = false;
+          setFrameCheckReady(false);
+          setFrameStatus("unavailable");
+        }
+      }
+    };
+
+    prepareModels();
+
+    return () => {
+      mounted = false;
+    };
+  }, []);
 
   useEffect(() => {
     activePromptRef.current = activePrompt;
@@ -158,6 +202,35 @@ function InterviewPage() {
     }
   };
 
+  const startFrameCheck = () => {
+    stopFrameCheck();
+
+    frameCheckInterval.current = window.setInterval(async () => {
+      if (!videoRef.current || !frameModelsLoadedRef.current || videoRef.current.readyState < 2) {
+        return;
+      }
+
+      try {
+        const result = await detectFace(videoRef.current);
+        const entry = {
+          timestamp: Date.now(),
+          status: result.status,
+        };
+        frameLogRef.current.push(entry);
+        setFrameStatus(result.status);
+      } catch (error) {
+        console.error("Frame check failed:", error);
+      }
+    }, 2000);
+  };
+
+  const stopFrameCheck = () => {
+    if (frameCheckInterval.current) {
+      window.clearInterval(frameCheckInterval.current);
+      frameCheckInterval.current = null;
+    }
+  };
+
   const startRecognition = () => {
     if (!recognitionRef.current || !sttSupported) {
       return;
@@ -194,15 +267,9 @@ function InterviewPage() {
         return;
       }
 
-      window.speechSynthesis.cancel();
-      const utterance = new SpeechSynthesisUtterance(prompt);
-      utterance.onend = () => {
+      speakWhenReady(prompt, interviewState.persona, () => {
         startRecognition();
-      };
-      utterance.onerror = () => {
-        startRecognition();
-      };
-      window.speechSynthesis.speak(utterance);
+      });
     } catch (error) {
       console.error("Interview prompt speech failed:", error);
       setSessionError("Voice playback is unavailable in this browser. You can still continue.");
@@ -222,8 +289,11 @@ function InterviewPage() {
     const setupMedia = async () => {
       sessionEndedRef.current = false;
       recordingChunksRef.current = [];
+      frameLogRef.current = [];
       setCameraStatus("idle");
       setCameraError("");
+      setVideoPreviewReady(false);
+      setFrameStatus(frameCheckReady ? "no_face" : "unavailable");
 
       if (!navigator.mediaDevices?.getUserMedia) {
         setCameraStatus("denied");
@@ -269,6 +339,7 @@ function InterviewPage() {
           }
         }
 
+        startFrameCheck();
         speakPrompt(questions[0].question);
       } catch (error) {
         setCameraStatus("denied");
@@ -283,9 +354,10 @@ function InterviewPage() {
     return () => {
       sessionEndedRef.current = true;
       stopRecognition();
+      stopFrameCheck();
 
       if (typeof window !== "undefined" && "speechSynthesis" in window) {
-        window.speechSynthesis.cancel();
+        stopSpeaking();
       }
 
       const recorder = mediaRecorderRef.current;
@@ -337,9 +409,10 @@ function InterviewPage() {
   const finalizeInterview = async (nextEntries) => {
     sessionEndedRef.current = true;
     stopRecognition();
+    stopFrameCheck();
 
     if ("speechSynthesis" in window) {
-      window.speechSynthesis.cancel();
+      stopSpeaking();
     }
 
     let videoBlobUrl = interviewState.videoBlobUrl;
@@ -354,7 +427,12 @@ function InterviewPage() {
       });
     }
 
-    persistInterviewState(nextEntries, videoBlobUrl);
+    setInterviewState((current) => ({
+      ...current,
+      transcriptEntries: nextEntries,
+      videoBlobUrl,
+      frameLog: frameLogRef.current,
+    }));
     navigate("/processing");
   };
 
@@ -454,9 +532,10 @@ function InterviewPage() {
     if (answeredCount < 3) {
       sessionEndedRef.current = true;
       stopRecognition();
+      stopFrameCheck();
 
       if ("speechSynthesis" in window) {
-        window.speechSynthesis.cancel();
+        stopSpeaking();
       }
 
       if (mediaRecorderRef.current && mediaRecorderRef.current.state !== "inactive") {
@@ -482,12 +561,17 @@ function InterviewPage() {
     return <Navigate to="/setup" replace />;
   }
 
+  const showVideoFallback =
+    cameraStatus === "denied" || (cameraStatus === "granted" && !videoPreviewReady);
+
   if (pageError) {
     return (
-      <div className="flex h-screen w-full items-center justify-center bg-gray-950 px-6 text-white">
-        <div className="w-full max-w-2xl rounded-3xl border border-red-900/50 bg-gray-900 p-8 text-center shadow-2xl">
-          <p className="text-base font-semibold text-red-400">{pageError}</p>
-          <p className="mt-3 text-sm leading-7 text-gray-400">
+      <div className="relative flex h-screen w-full items-center justify-center overflow-hidden bg-transparent px-6 text-ink">
+        <div className="absolute inset-0 -z-20 bg-grid bg-grid opacity-40" />
+        <div className="absolute inset-0 -z-10 bg-[radial-gradient(circle_at_top_left,_rgba(255,122,89,0.18),_transparent_32%),radial-gradient(circle_at_top_right,_rgba(46,172,165,0.18),_transparent_28%),linear-gradient(135deg,_#fff7f3_0%,_#f5fbfc_100%)]" />
+        <div className="w-full max-w-2xl rounded-[2rem] border border-white/70 bg-white/90 p-8 text-center shadow-panel backdrop-blur">
+          <p className="text-base font-semibold text-coral">{pageError}</p>
+          <p className="mt-3 text-sm leading-7 text-ink/65">
             Open the browser console and share the latest error if this keeps happening.
           </p>
         </div>
@@ -497,17 +581,19 @@ function InterviewPage() {
 
   if (!interviewReady) {
     return (
-      <div className="flex h-screen w-full items-center justify-center overflow-hidden bg-gray-950 px-6">
-        <section className="w-full max-w-4xl rounded-3xl border border-gray-800 bg-gray-900 p-6 shadow-2xl sm:p-8">
+      <div className="relative flex h-screen w-full items-center justify-center overflow-hidden bg-transparent px-6 text-ink">
+        <div className="absolute inset-0 -z-20 bg-grid bg-grid opacity-40" />
+        <div className="absolute inset-0 -z-10 bg-[radial-gradient(circle_at_top_left,_rgba(255,122,89,0.18),_transparent_32%),radial-gradient(circle_at_top_right,_rgba(46,172,165,0.18),_transparent_28%),linear-gradient(135deg,_#fff7f3_0%,_#f5fbfc_100%)]" />
+        <section className="w-full max-w-4xl rounded-[2rem] border border-white/70 bg-white/88 p-6 shadow-panel backdrop-blur sm:p-8">
           <div className="flex flex-col gap-6 lg:grid lg:grid-cols-[1.15fr_0.85fr] lg:items-start">
             <div>
-              <p className="text-xs font-semibold uppercase tracking-[0.28em] text-red-400 sm:text-sm">
+              <p className="text-xs font-semibold uppercase tracking-[0.28em] text-coral sm:text-sm">
                 Ready Check
               </p>
-              <h2 className="mt-3 text-[1.9rem] font-semibold leading-tight text-white sm:text-[2.35rem]">
+              <h2 className="mt-3 font-display text-[1.9rem] font-semibold leading-tight text-ink sm:text-[2.35rem]">
                 Begin the interview when you're settled
               </h2>
-              <p className="mt-3 max-w-2xl text-sm leading-7 text-gray-400 sm:text-base sm:leading-8">
+              <p className="mt-3 max-w-2xl text-sm leading-7 text-ink/70 sm:text-base sm:leading-8">
                 Once you start, the interviewer will begin speaking the first question right away.
                 Take a breath, get your notes and camera framing where you want them, then begin when ready.
               </p>
@@ -515,14 +601,14 @@ function InterviewPage() {
                 <button
                   type="button"
                   onClick={() => navigate("/setup")}
-                  className="rounded-lg border border-gray-700 px-5 py-3 text-sm font-medium text-gray-300 transition hover:bg-gray-800"
+                  className="rounded-lg border border-ink/10 bg-white px-5 py-3 text-sm font-medium text-ink transition hover:border-teal hover:text-teal"
                 >
                   Back to setup
                 </button>
                 <button
                   type="button"
                   onClick={() => setInterviewReady(true)}
-                  className="rounded-lg bg-white px-5 py-3 text-sm font-medium text-gray-900 transition hover:bg-gray-100"
+                  className="rounded-lg bg-coral px-5 py-3 text-sm font-medium text-white transition hover:bg-coral/90"
                 >
                   Begin interview
                 </button>
@@ -530,27 +616,27 @@ function InterviewPage() {
             </div>
 
             <div className="grid gap-3 sm:grid-cols-3 lg:grid-cols-1">
-              <div className="rounded-2xl border border-gray-800 bg-gray-800/70 p-4">
-                <p className="text-xs font-semibold uppercase tracking-[0.2em] text-gray-500">
+              <div className="rounded-[1.5rem] bg-mist p-4">
+                <p className="text-xs font-semibold uppercase tracking-[0.2em] text-teal">
                   Type
                 </p>
-                <p className="mt-2 text-base font-semibold text-white">
+                <p className="mt-2 text-base font-semibold text-ink">
                   {interviewState.interviewType}
                 </p>
               </div>
-              <div className="rounded-2xl border border-gray-800 bg-gray-800/70 p-4">
-                <p className="text-xs font-semibold uppercase tracking-[0.2em] text-gray-500">
+              <div className="rounded-[1.5rem] bg-mist p-4">
+                <p className="text-xs font-semibold uppercase tracking-[0.2em] text-teal">
                   Persona
                 </p>
-                <p className="mt-2 text-base font-semibold text-white">
+                <p className="mt-2 text-base font-semibold text-ink">
                   {interviewState.persona}
                 </p>
               </div>
-              <div className="rounded-2xl border border-gray-800 bg-gray-800/70 p-4">
-                <p className="text-xs font-semibold uppercase tracking-[0.2em] text-gray-500">
+              <div className="rounded-[1.5rem] bg-mist p-4">
+                <p className="text-xs font-semibold uppercase tracking-[0.2em] text-teal">
                   Questions
                 </p>
-                <p className="mt-2 text-base font-semibold text-white">{questions.length}</p>
+                <p className="mt-2 text-base font-semibold text-ink">{questions.length}</p>
               </div>
             </div>
           </div>
@@ -560,44 +646,75 @@ function InterviewPage() {
   }
 
   return (
-    <div className="h-screen w-full overflow-hidden bg-gray-950 text-white">
+    <div className="relative h-screen w-full overflow-hidden bg-transparent text-ink">
+      <div className="absolute inset-0 -z-20 bg-grid bg-grid opacity-35" />
+      <div className="absolute inset-0 -z-10 bg-[radial-gradient(circle_at_top_left,_rgba(255,122,89,0.16),_transparent_32%),radial-gradient(circle_at_top_right,_rgba(46,172,165,0.16),_transparent_28%),linear-gradient(135deg,_#fff7f3_0%,_#f5fbfc_100%)]" />
       <div className="flex h-full flex-col overflow-hidden">
-        <div className="flex items-center justify-between border-b border-gray-800 px-6 py-3">
-          <span className="text-sm font-medium text-gray-400">
+        <div className="flex items-center justify-between border-b border-white/60 bg-white/70 px-6 py-3 backdrop-blur">
+          <span className="text-sm font-medium text-ink/65">
             {interviewState.persona} Interviewer
           </span>
-          <span className="text-sm text-gray-400">
+          <span className="text-sm text-ink/55">
             Question {currentQuestionIndex + 1} of {questions.length}
           </span>
         </div>
 
         <div className="flex flex-1 overflow-hidden">
-          <div className="flex w-1/2 min-h-0 flex-col border-r border-gray-800">
-            <div className="flex flex-1 items-center justify-center overflow-hidden bg-black">
-              {cameraStatus === "granted" ? (
-                <video
-                  ref={videoRef}
-                  autoPlay
-                  muted
-                  playsInline
-                  className="h-full w-full object-cover scale-x-[-1]"
-                />
-              ) : (
-                <div className="flex h-full w-full items-center justify-center px-8 text-center text-sm leading-7 text-gray-500">
-                  {cameraStatus === "denied"
-                    ? cameraError
-                    : "Starting your camera and microphone..."}
+          <div className="flex w-1/2 min-h-0 flex-col border-r border-white/60 bg-white/55 backdrop-blur">
+            <div className="relative flex flex-1 items-center justify-center overflow-hidden bg-ink">
+              <video
+                ref={videoRef}
+                autoPlay
+                muted
+                playsInline
+                onLoadedMetadata={() => setVideoPreviewReady(true)}
+                onCanPlay={() => setVideoPreviewReady(true)}
+                onPlaying={() => setVideoPreviewReady(true)}
+                onError={() => {
+                  setVideoPreviewReady(false);
+                  setCameraError("Your camera is connected, but the live preview could not be displayed.");
+                }}
+                className={[
+                  "h-full w-full object-cover scale-x-[-1]",
+                  showVideoFallback ? "invisible" : "visible",
+                ].join(" ")}
+              />
+              {showVideoFallback ? (
+                <div className="absolute inset-0 flex items-center justify-center px-8 text-center">
+                  <div className="max-w-md rounded-[1.5rem] border border-white/10 bg-white/10 px-6 py-5 backdrop-blur">
+                    <p className="text-sm font-semibold uppercase tracking-[0.2em] text-gold">
+                      Camera preview
+                    </p>
+                    <p className="mt-3 text-sm leading-7 text-white/80">
+                      {cameraStatus === "denied"
+                        ? cameraError
+                        : !frameCheckReady
+                          ? "Live preview is available, but the framing check models are missing. Add the two tiny face detector files to public/models to enable this feature."
+                        : cameraError ||
+                          "Your camera and mic are active, but the live preview is still loading. You can continue the interview, and the recording should still capture normally."}
+                    </p>
+                  </div>
                 </div>
-              )}
+              ) : null}
+              <div className="absolute bottom-3 left-3">
+                <span
+                  className={[
+                    "rounded-full px-2 py-1 text-xs text-white",
+                    frameMessages[frameStatus]?.color || "bg-teal",
+                  ].join(" ")}
+                >
+                  {frameMessages[frameStatus]?.label || "✓ In frame"}
+                </span>
+              </div>
             </div>
 
-            <div className="h-2/5 overflow-y-auto border-t border-gray-800 bg-gray-900 p-4">
-              <p className="mb-2 text-xs uppercase tracking-widest text-gray-500">
+            <div className="h-2/5 overflow-y-auto border-t border-white/60 bg-mist/80 p-4">
+              <p className="mb-2 text-xs uppercase tracking-widest text-teal">
                 Your Response
               </p>
-              <p className="text-sm leading-relaxed text-gray-200">
+              <p className="text-sm leading-relaxed text-ink/85">
                 {(sttSupported ? liveTranscript : manualAnswer) || (
-                  <span className="italic text-gray-600">
+                  <span className="italic text-ink/40">
                     Your answer will appear here as you speak…
                   </span>
                 )}
@@ -610,30 +727,30 @@ function InterviewPage() {
                     value={manualAnswer}
                     onChange={(event) => setManualAnswer(event.target.value)}
                     placeholder="Type your answer here…"
-                    className="w-full rounded-lg border border-gray-700 bg-gray-950 px-4 py-3 text-sm leading-7 text-white outline-none transition focus:border-gray-500"
+                    className="w-full rounded-[1.25rem] border border-ink/10 bg-white px-4 py-3 text-sm leading-7 text-ink outline-none transition focus:border-teal"
                   />
                 </div>
               ) : null}
 
               {sessionError ? (
-                <p className="mt-4 rounded-lg border border-red-900/60 bg-red-950/50 px-4 py-3 text-sm text-red-300">
+                <p className="mt-4 rounded-[1rem] border border-coral/20 bg-coral/10 px-4 py-3 text-sm text-coral">
                   {sessionError}
                 </p>
               ) : null}
             </div>
           </div>
 
-          <div className="flex w-1/2 min-h-0 flex-col justify-between bg-gray-900 p-8">
+          <div className="flex w-1/2 min-h-0 flex-col justify-between bg-white/72 p-8 backdrop-blur">
             <div className="flex min-h-0 flex-col gap-6 overflow-y-auto pr-2">
               <div>
-                <p className="mb-3 text-xs uppercase tracking-widest text-gray-500">
+                <p className="mb-3 text-xs uppercase tracking-widest text-ink/45">
                   Current Question
                 </p>
-                <p className="text-xl font-medium leading-relaxed text-white">
+                <p className="text-xl font-medium leading-relaxed text-ink">
                   {activePrompt || currentQuestion?.question}
                 </p>
                 {currentQuestion?.resume_reference ? (
-                  <p className="mt-3 text-xs italic text-gray-500">
+                  <p className="mt-3 text-xs italic text-ink/45">
                     📄 Based on: "{currentQuestion.resume_reference}"
                   </p>
                 ) : null}
@@ -644,19 +761,32 @@ function InterviewPage() {
                   className={[
                     "h-2 w-2 rounded-full animate-pulse",
                     status === "asking"
-                      ? "bg-blue-400"
+                      ? "bg-sky-400"
                       : status === "listening"
-                        ? "bg-green-400"
-                        : "bg-amber-400",
+                        ? "bg-teal"
+                        : "bg-gold",
                   ].join(" ")}
                 />
-                <span className="text-sm text-gray-400">
+                <span className="text-sm text-ink/60">
                   {status === "asking"
                     ? "Asking…"
                     : status === "listening"
                       ? "Listening…"
                       : "Processing…"}
                 </span>
+              </div>
+
+              <div className="rounded-[1.5rem] bg-mist p-4">
+                <p className="mb-2 text-xs uppercase tracking-widest text-coral">
+                  Interviewer posture
+                </p>
+                <p className="text-sm leading-7 text-ink/75">
+                  {interviewerState === "Speaking"
+                    ? "Delivering the next prompt with a calm interview cadence."
+                    : interviewerState === "Listening"
+                      ? "Focused on your response and waiting for specific detail."
+                      : "Reviewing your answer before deciding whether to move on or probe deeper."}
+                </p>
               </div>
             </div>
 
@@ -668,19 +798,19 @@ function InterviewPage() {
                 processingAnswer ||
                 !(sttSupported ? liveTranscript.trim() : manualAnswer.trim())
               }
-              className="mt-6 w-full rounded-lg bg-white py-3 text-sm font-medium text-gray-900 transition-colors hover:bg-gray-100 disabled:cursor-not-allowed disabled:opacity-30"
+              className="mt-6 w-full rounded-[1rem] bg-coral py-3 text-sm font-medium text-white transition-colors hover:bg-coral/90 disabled:cursor-not-allowed disabled:opacity-30"
             >
               {processingAnswer ? "Processing…" : "Done Answering"}
             </button>
           </div>
         </div>
 
-        <div className="flex items-center justify-center border-t border-gray-800 bg-gray-950 px-6 py-4">
+        <div className="flex items-center justify-center border-t border-white/60 bg-white/70 px-6 py-4 backdrop-blur">
           <button
             type="button"
             onClick={handleEndInterview}
             disabled={isEnding}
-            className="rounded-lg border border-red-800 px-6 py-2 text-sm text-red-400 transition-colors hover:border-red-600 hover:bg-red-950 disabled:cursor-not-allowed disabled:opacity-50"
+            className="rounded-[1rem] border border-coral/40 px-6 py-2 text-sm text-coral transition-colors hover:border-coral hover:bg-coral/10 disabled:cursor-not-allowed disabled:opacity-50"
           >
             {isEnding ? "Ending…" : "End Interview"}
           </button>
