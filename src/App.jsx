@@ -7,6 +7,7 @@ import PageTransition from "./components/PageTransition";
 import ProtectedRoute from "./components/ProtectedRoute";
 
 const DashboardPage = lazy(() => import("./pages/DashboardPage"));
+const InsufficientPage = lazy(() => import("./pages/InsufficientPage"));
 const InterviewPage = lazy(() => import("./pages/InterviewPage"));
 const LoginPage = lazy(() => import("./pages/LoginPage"));
 const ProcessingPage = lazy(() => import("./pages/ProcessingPage"));
@@ -44,10 +45,25 @@ function AnimatedRoutes() {
           }
         />
         <Route element={<ProtectedRoute />}>
+          <Route
+            path="/interview"
+            element={
+              <PageTransition>
+                <InterviewPage />
+              </PageTransition>
+            }
+          />
+          <Route
+            path="/insufficient"
+            element={
+              <PageTransition>
+                <InsufficientPage />
+              </PageTransition>
+            }
+          />
           <Route element={<AppLayout />}>
             <Route path="/dashboard" element={<DashboardPage />} />
             <Route path="/setup" element={<SetupPage />} />
-            <Route path="/interview" element={<InterviewPage />} />
             <Route path="/processing" element={<ProcessingPage />} />
             <Route path="/results" element={<ResultsPage />} />
           </Route>

@@ -1,7 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import toast from "react-hot-toast";
 import { Navigate, useNavigate } from "react-router-dom";
-import PageShell from "../components/PageShell";
 import { useInterview } from "../context/InterviewContext";
 import { decideFollowUp } from "../lib/groqFollowUp";
 
@@ -19,9 +18,7 @@ function InterviewPage() {
   const statusRef = useRef("asking");
   const processingAnswerRef = useRef(false);
   const sttSupportedRef = useRef(true);
-  const questions = interviewState.questions?.length
-    ? interviewState.questions
-    : [];
+  const questions = interviewState.questions?.length ? interviewState.questions : [];
   const [cameraStatus, setCameraStatus] = useState("idle");
   const [cameraError, setCameraError] = useState("");
   const [status, setStatus] = useState("asking");
@@ -42,15 +39,9 @@ function InterviewPage() {
   const [pageError, setPageError] = useState("");
   const [interviewReady, setInterviewReady] = useState(false);
   const answeredQuestionCount = useMemo(
-    () =>
-      new Set(
-        transcriptEntries
-          .filter((entry) => !entry.is_follow_up && entry.answer.trim())
-          .map((entry) => entry.question_id),
-      ).size,
+    () => transcriptEntries.filter((entry) => !entry.is_follow_up && entry.answer.trim()).length,
     [transcriptEntries],
   );
-  const canEndInterview = answeredQuestionCount >= 3;
   const currentQuestion = questions[currentQuestionIndex] || null;
 
   useEffect(() => {
@@ -85,8 +76,7 @@ function InterviewPage() {
       return undefined;
     }
 
-    const SpeechRecognitionApi =
-      window.SpeechRecognition || window.webkitSpeechRecognition;
+    const SpeechRecognitionApi = window.SpeechRecognition || window.webkitSpeechRecognition;
 
     if (!SpeechRecognitionApi) {
       setSttSupported(false);
@@ -230,6 +220,11 @@ function InterviewPage() {
     }
 
     const setupMedia = async () => {
+      sessionEndedRef.current = false;
+      recordingChunksRef.current = [];
+      setCameraStatus("idle");
+      setCameraError("");
+
       if (!navigator.mediaDevices?.getUserMedia) {
         setCameraStatus("denied");
         setCameraError("This browser does not support camera or microphone access.");
@@ -247,6 +242,11 @@ function InterviewPage() {
 
         if (videoRef.current) {
           videoRef.current.srcObject = stream;
+          try {
+            await videoRef.current.play();
+          } catch (playError) {
+            console.error("Video preview playback failed:", playError);
+          }
         }
 
         if (typeof MediaRecorder !== "undefined") {
@@ -273,8 +273,7 @@ function InterviewPage() {
       } catch (error) {
         setCameraStatus("denied");
         setCameraError(
-          error?.message ||
-            "We could not access your camera and microphone for this interview.",
+          error?.message || "We could not access your camera and microphone for this interview.",
         );
       }
     };
@@ -443,12 +442,39 @@ function InterviewPage() {
     await advanceToNextQuestion(nextEntries);
   };
 
-  const finishInterview = async () => {
-    if (!canEndInterview || isEnding) {
+  const handleEndInterview = async () => {
+    if (isEnding) {
       return;
     }
 
     setIsEnding(true);
+
+    const answeredCount = transcriptEntries.filter((entry) => !entry.is_follow_up).length;
+
+    if (answeredCount < 3) {
+      sessionEndedRef.current = true;
+      stopRecognition();
+
+      if ("speechSynthesis" in window) {
+        window.speechSynthesis.cancel();
+      }
+
+      if (mediaRecorderRef.current && mediaRecorderRef.current.state !== "inactive") {
+        try {
+          mediaRecorderRef.current.stop();
+        } catch (error) {
+          console.error("MediaRecorder early stop failed:", error);
+        }
+      }
+
+      if (videoRef.current?.srcObject) {
+        videoRef.current.srcObject.getTracks().forEach((track) => track.stop());
+      }
+
+      navigate("/insufficient");
+      return;
+    }
+
     await finalizeInterview(transcriptEntries);
   };
 
@@ -458,308 +484,209 @@ function InterviewPage() {
 
   if (pageError) {
     return (
-      <PageShell
-        eyebrow="Interview"
-        title="Interview setup hit a browser error"
-        description="The page could not finish initializing cleanly, but the app is still running."
-      >
-        <div className="rounded-[1.5rem] border border-coral/20 bg-coral/10 p-5 text-coral">
-          <p className="text-base font-semibold">{pageError}</p>
-          <p className="mt-3 text-sm leading-7">
+      <div className="flex h-screen w-full items-center justify-center bg-gray-950 px-6 text-white">
+        <div className="w-full max-w-2xl rounded-3xl border border-red-900/50 bg-gray-900 p-8 text-center shadow-2xl">
+          <p className="text-base font-semibold text-red-400">{pageError}</p>
+          <p className="mt-3 text-sm leading-7 text-gray-400">
             Open the browser console and share the latest error if this keeps happening.
           </p>
         </div>
-      </PageShell>
+      </div>
     );
   }
 
-  const statusStyles = {
-    asking: "bg-gold/20 text-gold",
-    listening: "bg-teal/15 text-teal",
-    processing: "bg-coral/15 text-coral",
-  };
-
   if (!interviewReady) {
     return (
-      <PageShell
-        eyebrow="Interview"
-        title="Begin when you're settled"
-        description="Set your notes, camera framing, and posture first. The interviewer starts speaking the moment you begin."
-      >
-        <div className="xl:flex xl:h-[calc(100svh-16rem)] xl:min-h-0 xl:flex-col xl:justify-center">
-          <section className="mx-auto w-full max-w-4xl rounded-[1.5rem] border border-ink/10 bg-white p-5 shadow-panel sm:p-6 lg:p-8">
-            <div className="flex flex-col gap-6 lg:grid lg:grid-cols-[1.15fr_0.85fr] lg:items-start">
-              <div>
-                <p className="text-xs font-semibold uppercase tracking-[0.28em] text-coral sm:text-sm">
-                  Ready Check
-                </p>
-                <h2 className="mt-3 font-display text-[1.9rem] font-semibold leading-tight text-ink sm:text-[2.35rem]">
-                  Begin the interview when you&apos;re ready
-                </h2>
-                <p className="mt-3 max-w-2xl text-sm leading-7 text-ink/72 sm:text-base sm:leading-8">
-                  Once you start, the interviewer will begin speaking the first question right away.
-                  Take a breath, get your notes and camera framing where you want them, then begin when ready.
-                </p>
-                <div className="mt-6 flex flex-col gap-3 sm:flex-row">
-                  <button
-                    type="button"
-                    onClick={() => navigate("/setup")}
-                    className="rounded-full border border-ink/10 bg-white px-5 py-3 text-sm font-semibold text-ink transition hover:border-teal hover:text-teal"
-                  >
-                    Back to setup
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setInterviewReady(true)}
-                    className="rounded-full bg-coral px-5 py-3 text-sm font-semibold text-white transition hover:bg-coral/90"
-                  >
-                    Begin interview
-                  </button>
-                </div>
-              </div>
-
-              <div className="grid gap-3 sm:grid-cols-3 lg:grid-cols-1">
-                <div className="rounded-[1.5rem] bg-mist p-4">
-                  <p className="text-xs font-semibold uppercase tracking-[0.2em] text-teal">
-                    Type
-                  </p>
-                  <p className="mt-2 text-base font-semibold text-ink">
-                    {interviewState.interviewType}
-                  </p>
-                </div>
-                <div className="rounded-[1.5rem] bg-mist p-4">
-                  <p className="text-xs font-semibold uppercase tracking-[0.2em] text-teal">
-                    Persona
-                  </p>
-                  <p className="mt-2 text-base font-semibold text-ink">
-                    {interviewState.persona}
-                  </p>
-                </div>
-                <div className="rounded-[1.5rem] bg-mist p-4">
-                  <p className="text-xs font-semibold uppercase tracking-[0.2em] text-teal">
-                    Questions
-                  </p>
-                  <p className="mt-2 text-base font-semibold text-ink">
-                    {questions.length}
-                  </p>
-                </div>
+      <div className="flex h-screen w-full items-center justify-center overflow-hidden bg-gray-950 px-6">
+        <section className="w-full max-w-4xl rounded-3xl border border-gray-800 bg-gray-900 p-6 shadow-2xl sm:p-8">
+          <div className="flex flex-col gap-6 lg:grid lg:grid-cols-[1.15fr_0.85fr] lg:items-start">
+            <div>
+              <p className="text-xs font-semibold uppercase tracking-[0.28em] text-red-400 sm:text-sm">
+                Ready Check
+              </p>
+              <h2 className="mt-3 text-[1.9rem] font-semibold leading-tight text-white sm:text-[2.35rem]">
+                Begin the interview when you're settled
+              </h2>
+              <p className="mt-3 max-w-2xl text-sm leading-7 text-gray-400 sm:text-base sm:leading-8">
+                Once you start, the interviewer will begin speaking the first question right away.
+                Take a breath, get your notes and camera framing where you want them, then begin when ready.
+              </p>
+              <div className="mt-6 flex flex-col gap-3 sm:flex-row">
+                <button
+                  type="button"
+                  onClick={() => navigate("/setup")}
+                  className="rounded-lg border border-gray-700 px-5 py-3 text-sm font-medium text-gray-300 transition hover:bg-gray-800"
+                >
+                  Back to setup
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setInterviewReady(true)}
+                  className="rounded-lg bg-white px-5 py-3 text-sm font-medium text-gray-900 transition hover:bg-gray-100"
+                >
+                  Begin interview
+                </button>
               </div>
             </div>
-          </section>
-        </div>
-      </PageShell>
+
+            <div className="grid gap-3 sm:grid-cols-3 lg:grid-cols-1">
+              <div className="rounded-2xl border border-gray-800 bg-gray-800/70 p-4">
+                <p className="text-xs font-semibold uppercase tracking-[0.2em] text-gray-500">
+                  Type
+                </p>
+                <p className="mt-2 text-base font-semibold text-white">
+                  {interviewState.interviewType}
+                </p>
+              </div>
+              <div className="rounded-2xl border border-gray-800 bg-gray-800/70 p-4">
+                <p className="text-xs font-semibold uppercase tracking-[0.2em] text-gray-500">
+                  Persona
+                </p>
+                <p className="mt-2 text-base font-semibold text-white">
+                  {interviewState.persona}
+                </p>
+              </div>
+              <div className="rounded-2xl border border-gray-800 bg-gray-800/70 p-4">
+                <p className="text-xs font-semibold uppercase tracking-[0.2em] text-gray-500">
+                  Questions
+                </p>
+                <p className="mt-2 text-base font-semibold text-white">{questions.length}</p>
+              </div>
+            </div>
+          </div>
+        </section>
+      </div>
     );
   }
 
   return (
-    <PageShell
-      eyebrow="Interview"
-      title="Stay present and answer like it counts"
-      description="Your interviewer will ask each question aloud, listen for your response, and decide whether to probe deeper or move on."
-    >
-      <div className="flex items-center justify-start xl:justify-end">
-        <p className="rounded-full bg-white px-3.5 py-2 text-[11px] font-semibold uppercase tracking-[0.2em] text-ink/50 sm:px-4 sm:text-xs">
-          Question {Math.min(currentQuestionIndex + 1, questions.length)} of {questions.length}
-        </p>
-      </div>
+    <div className="h-screen w-full overflow-hidden bg-gray-950 text-white">
+      <div className="flex h-full flex-col overflow-hidden">
+        <div className="flex items-center justify-between border-b border-gray-800 px-6 py-3">
+          <span className="text-sm font-medium text-gray-400">
+            {interviewState.persona} Interviewer
+          </span>
+          <span className="text-sm text-gray-400">
+            Question {currentQuestionIndex + 1} of {questions.length}
+          </span>
+        </div>
 
-      <div className="mt-5 grid gap-5 xl:h-[calc(100svh-15.5rem)] xl:overflow-hidden 2xl:grid-cols-[minmax(0,1.1fr)_minmax(20rem,0.9fr)]">
-        <div className="space-y-6">
-          <section className="rounded-[1.5rem] border border-ink/10 bg-ink p-4 text-white shadow-panel sm:p-5">
-            <div className="overflow-hidden rounded-[1.5rem] border border-white/10 bg-white/10">
+        <div className="flex flex-1 overflow-hidden">
+          <div className="flex w-1/2 min-h-0 flex-col border-r border-gray-800">
+            <div className="flex flex-1 items-center justify-center overflow-hidden bg-black">
               {cameraStatus === "granted" ? (
                 <video
                   ref={videoRef}
                   autoPlay
-                  playsInline
                   muted
-                  className="aspect-[16/10] max-h-[44vh] w-full -scale-x-100 object-cover xl:max-h-[50vh]"
+                  playsInline
+                  className="h-full w-full object-cover scale-x-[-1]"
                 />
               ) : (
-                <div className="flex aspect-[16/10] max-h-[44vh] items-center justify-center px-6 text-center text-sm leading-7 text-white/70 xl:max-h-[50vh]">
+                <div className="flex h-full w-full items-center justify-center px-8 text-center text-sm leading-7 text-gray-500">
                   {cameraStatus === "denied"
                     ? cameraError
-                    : "Starting your camera and recording setup..."}
+                    : "Starting your camera and microphone..."}
                 </div>
               )}
             </div>
 
-            <div className="mt-4 flex flex-wrap items-center gap-3">
-              <span
-                className={[
-                  "rounded-full px-4 py-2 text-xs font-semibold uppercase tracking-[0.2em]",
-                  statusStyles[status],
-                ].join(" ")}
-              >
-                {status === "asking"
-                  ? "Asking…"
-                  : status === "listening"
-                    ? "Listening…"
-                    : "Processing…"}
-              </span>
-              <span className="rounded-full bg-white/10 px-4 py-2 text-xs font-semibold uppercase tracking-[0.2em] text-white/70">
-                {interviewState.interviewType}
-              </span>
-            </div>
-
-            <div className="mt-4 rounded-[1.5rem] border border-white/10 bg-white/10 p-4 sm:p-5">
-              <p className="text-xs font-semibold uppercase tracking-[0.2em] text-gold">
-                Live transcript
+            <div className="h-2/5 overflow-y-auto border-t border-gray-800 bg-gray-900 p-4">
+              <p className="mb-2 text-xs uppercase tracking-widest text-gray-500">
+                Your Response
               </p>
-              <p className="mt-3 min-h-20 text-sm leading-7 text-white/85 sm:text-base sm:leading-8">
-                {(sttSupported ? liveTranscript : manualAnswer) ||
-                  "Your answer will appear here once the interviewer finishes asking the question."}
+              <p className="text-sm leading-relaxed text-gray-200">
+                {(sttSupported ? liveTranscript : manualAnswer) || (
+                  <span className="italic text-gray-600">
+                    Your answer will appear here as you speak…
+                  </span>
+                )}
               </p>
-            </div>
 
-            {!sttSupported ? (
-              <div className="mt-4 rounded-[1.5rem] border border-white/10 bg-white/10 p-4 sm:p-5">
-                <p className="text-sm font-semibold uppercase tracking-[0.2em] text-gold">
-                  Speech recognition unavailable
+              {!sttSupported ? (
+                <div className="mt-4">
+                  <textarea
+                    rows={5}
+                    value={manualAnswer}
+                    onChange={(event) => setManualAnswer(event.target.value)}
+                    placeholder="Type your answer here…"
+                    className="w-full rounded-lg border border-gray-700 bg-gray-950 px-4 py-3 text-sm leading-7 text-white outline-none transition focus:border-gray-500"
+                  />
+                </div>
+              ) : null}
+
+              {sessionError ? (
+                <p className="mt-4 rounded-lg border border-red-900/60 bg-red-950/50 px-4 py-3 text-sm text-red-300">
+                  {sessionError}
                 </p>
-                <textarea
-                  rows={5}
-                  value={manualAnswer}
-                  onChange={(event) => setManualAnswer(event.target.value)}
-                  placeholder="Type your answer here…"
-                  className="mt-4 w-full rounded-[1.25rem] border border-white/10 bg-white px-4 py-4 text-base leading-7 text-ink outline-none transition focus:border-teal"
-                />
-              </div>
-            ) : null}
-
-            {sessionError ? (
-              <p className="mt-4 rounded-2xl border border-coral/20 bg-coral/10 px-4 py-3 text-sm text-coral">
-                {sessionError}
-              </p>
-            ) : null}
-
-            <div className="mt-4 flex flex-col gap-3 sm:flex-row">
-              <button
-                type="button"
-                onClick={handleAnswerSubmission}
-                disabled={processingAnswer || status === "asking"}
-                className="flex-1 rounded-full bg-coral px-5 py-3 text-sm font-semibold text-white transition hover:bg-coral/90 disabled:cursor-not-allowed disabled:bg-coral/50"
-              >
-                {processingAnswer ? "Processing…" : "Done Answering"}
-              </button>
-              {canEndInterview ? (
-                <button
-                  type="button"
-                  onClick={finishInterview}
-                  disabled={isEnding}
-                  className="rounded-full border border-white/15 bg-white/10 px-5 py-3 text-sm font-semibold text-white transition hover:bg-white/15 disabled:cursor-not-allowed disabled:opacity-60"
-                >
-                  {isEnding ? "Ending…" : "End Interview"}
-                </button>
               ) : null}
             </div>
-          </section>
-        </div>
+          </div>
 
-        <div className="space-y-5 xl:flex xl:min-h-0 xl:flex-col xl:overflow-hidden">
-          <section className="rounded-[1.5rem] border border-ink/10 bg-white p-4 shadow-panel sm:p-5 xl:flex xl:min-h-0 xl:flex-col">
-            <div className="flex items-start justify-between gap-4">
+          <div className="flex w-1/2 min-h-0 flex-col justify-between bg-gray-900 p-8">
+            <div className="flex min-h-0 flex-col gap-6 overflow-y-auto pr-2">
               <div>
-                <p className="text-sm font-semibold uppercase tracking-[0.2em] text-coral">
-                  AI interviewer
+                <p className="mb-3 text-xs uppercase tracking-widest text-gray-500">
+                  Current Question
                 </p>
-                <h3 className="mt-2 text-xl font-bold text-ink sm:text-2xl">
-                  {interviewState.persona}
-                </h3>
-                <p className="mt-2 text-sm leading-7 text-ink/65">
-                  {interviewerState === "Speaking"
-                    ? "Delivering the next prompt with a deliberate, interview-style cadence."
-                    : interviewerState === "Listening"
-                      ? "Focused on your answer and waiting for concrete detail."
-                      : "Reviewing your answer before deciding whether to probe deeper."}
+                <p className="text-xl font-medium leading-relaxed text-white">
+                  {activePrompt || currentQuestion?.question}
                 </p>
+                {currentQuestion?.resume_reference ? (
+                  <p className="mt-3 text-xs italic text-gray-500">
+                    📄 Based on: "{currentQuestion.resume_reference}"
+                  </p>
+                ) : null}
               </div>
-              <div className="flex items-center gap-2 rounded-full bg-mist px-4 py-2">
-                <span className="h-2.5 w-2.5 animate-pulse rounded-full bg-teal" />
-                <span className="text-xs font-semibold uppercase tracking-[0.2em] text-ink/60">
-                  {interviewerState}
+
+              <div className="flex items-center gap-2">
+                <span
+                  className={[
+                    "h-2 w-2 rounded-full animate-pulse",
+                    status === "asking"
+                      ? "bg-blue-400"
+                      : status === "listening"
+                        ? "bg-green-400"
+                        : "bg-amber-400",
+                  ].join(" ")}
+                />
+                <span className="text-sm text-gray-400">
+                  {status === "asking"
+                    ? "Asking…"
+                    : status === "listening"
+                      ? "Listening…"
+                      : "Processing…"}
                 </span>
               </div>
             </div>
 
-            <div className="mt-5 rounded-[1.5rem] border border-ink/10 bg-mist p-4 sm:p-5">
-              <p className="text-xs font-semibold uppercase tracking-[0.2em] text-ink/50">
-                Current prompt
-              </p>
-              <p className="mt-3 text-lg font-semibold leading-8 text-ink sm:text-xl sm:leading-9">
-                {activePrompt}
-              </p>
-              {currentQuestion?.resume_reference ? (
-                <p className="mt-3 text-sm italic leading-7 text-ink/55">
-                  📄 Based on: "{currentQuestion.resume_reference}"
-                </p>
-              ) : null}
-            </div>
+            <button
+              type="button"
+              onClick={handleAnswerSubmission}
+              disabled={
+                status !== "listening" ||
+                processingAnswer ||
+                !(sttSupported ? liveTranscript.trim() : manualAnswer.trim())
+              }
+              className="mt-6 w-full rounded-lg bg-white py-3 text-sm font-medium text-gray-900 transition-colors hover:bg-gray-100 disabled:cursor-not-allowed disabled:opacity-30"
+            >
+              {processingAnswer ? "Processing…" : "Done Answering"}
+            </button>
+          </div>
+        </div>
 
-            <div className="mt-4 rounded-[1.5rem] border border-ink/10 bg-white p-4 sm:p-5">
-              <p className="text-xs font-semibold uppercase tracking-[0.2em] text-ink/50">
-                Question notes
-              </p>
-              <div className="mt-4 space-y-3">
-                <div className="rounded-[1.25rem] bg-mist p-4">
-                  <p className="text-xs font-semibold uppercase tracking-[0.2em] text-teal">
-                    Category
-                  </p>
-                  <p className="mt-2 text-base font-semibold text-ink">
-                    {currentQuestion?.category || "Interview"}
-                  </p>
-                </div>
-                <div className="rounded-[1.25rem] bg-mist p-4">
-                  <p className="text-xs font-semibold uppercase tracking-[0.2em] text-teal">
-                    Intent
-                  </p>
-                  <p className="mt-2 text-base leading-7 text-ink/75">
-                    {currentQuestion?.intent || "Evaluating your overall readiness."}
-                  </p>
-                </div>
-                <div className="rounded-[1.25rem] bg-mist p-4">
-                  <p className="text-xs font-semibold uppercase tracking-[0.2em] text-teal">
-                    Follow-up rule
-                  </p>
-                  <p className="mt-2 text-base leading-7 text-ink/75">
-                    One follow-up max per question. If you already got one, the next step is moving on.
-                  </p>
-                </div>
-              </div>
-            </div>
-          </section>
-
-          <section className="rounded-[1.5rem] border border-ink/10 bg-white p-4 sm:p-5 xl:flex xl:min-h-0 xl:flex-col">
-            <p className="text-sm font-semibold uppercase tracking-[0.2em] text-teal">
-              Transcript log
-            </p>
-            <div className="mt-4 max-h-[28rem] space-y-3 overflow-y-auto pr-1 xl:min-h-0 xl:max-h-none xl:flex-1">
-              {transcriptEntries.length ? (
-                transcriptEntries.map((entry, index) => (
-                  <div
-                    key={`${entry.question_id}-${index}`}
-                    className="rounded-[1.25rem] bg-mist p-4"
-                  >
-                    <p className="text-xs font-semibold uppercase tracking-[0.2em] text-coral">
-                      {entry.is_follow_up ? "Follow-up response" : "Primary response"}
-                    </p>
-                    <p className="mt-2 text-sm leading-7 text-ink/65">{entry.question}</p>
-                    <p className="mt-3 text-base leading-7 text-ink/80">{entry.answer}</p>
-                  </div>
-                ))
-              ) : (
-                <div className="rounded-[1.25rem] bg-mist p-4">
-                  <p className="text-sm leading-7 text-ink/65">
-                    Your submitted answers will collect here as the session progresses.
-                  </p>
-                </div>
-              )}
-            </div>
-          </section>
+        <div className="flex items-center justify-center border-t border-gray-800 bg-gray-950 px-6 py-4">
+          <button
+            type="button"
+            onClick={handleEndInterview}
+            disabled={isEnding}
+            className="rounded-lg border border-red-800 px-6 py-2 text-sm text-red-400 transition-colors hover:border-red-600 hover:bg-red-950 disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            {isEnding ? "Ending…" : "End Interview"}
+          </button>
         </div>
       </div>
-
-    </PageShell>
+    </div>
   );
 }
 
