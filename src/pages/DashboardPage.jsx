@@ -70,12 +70,26 @@ function isTimeoutError(error) {
   return error instanceof Error && error.message.includes("taking too long");
 }
 
+function getJobDescriptionPreview(text, maxLines = 3) {
+  const lines = String(text || "")
+    .split("\n")
+    .map((line) => line.trim())
+    .filter(Boolean);
+
+  return {
+    preview: lines.slice(0, maxLines),
+    hasMore: lines.length > maxLines,
+    full: lines,
+  };
+}
+
 function DashboardPage() {
   const navigate = useNavigate();
   const { currentUser } = useAuth();
   const { interviewState, setInterviewState } = useInterview();
   const [sessions, setSessions] = useState([]);
   const [resumeProcessing, setResumeProcessing] = useState(false);
+  const [expandedSessions, setExpandedSessions] = useState({});
   const fileInputRef = useRef(null);
 
   const logDashboard = (event, payload = {}) => {
@@ -288,6 +302,13 @@ function DashboardPage() {
     navigate("/setup");
   };
 
+  const toggleSessionExpanded = (sessionId) => {
+    setExpandedSessions((current) => ({
+      ...current,
+      [sessionId]: !current[sessionId],
+    }));
+  };
+
   const handleResumeSelection = async (event) => {
     const file = event.target.files?.[0];
 
@@ -440,8 +461,8 @@ function DashboardPage() {
       nextTo="/setup"
       nextLabel="Start Setup"
     >
-      <div className="space-y-5 xl:grid xl:h-[calc(100svh-15.5rem)] xl:grid-cols-[0.9fr_1.1fr] xl:grid-rows-[auto_minmax(0,1fr)] xl:gap-5 xl:space-y-0">
-        <section className="rounded-[1.5rem] border border-ink/10 bg-white p-5 shadow-panel sm:p-6">
+      <div className="space-y-5 xl:grid xl:h-[calc(100svh-15.5rem)] xl:min-w-0 xl:grid-cols-[0.9fr_1.1fr] xl:grid-rows-[auto_minmax(0,1fr)] xl:gap-5 xl:space-y-0">
+        <section className="rounded-[1.5rem] border border-ink/10 bg-white p-5 shadow-panel sm:p-6 xl:min-w-0 xl:overflow-hidden">
           <p className="text-sm font-semibold uppercase tracking-[0.2em] text-teal">
             Resume Upload
           </p>
@@ -503,44 +524,81 @@ function DashboardPage() {
           </div>
         </section>
 
-        <section className="rounded-[1.5rem] border border-ink/10 bg-white p-5 shadow-panel sm:p-6 xl:row-span-2 xl:min-h-0">
+        <section className="rounded-[1.5rem] border border-ink/10 bg-white p-5 shadow-panel sm:p-6 xl:row-span-2 xl:min-h-0 xl:min-w-0 xl:overflow-hidden">
           <p className="text-sm font-semibold uppercase tracking-[0.2em] text-coral">
             Past sessions
           </p>
           {sessions.length ? (
-            <div className="mt-5 grid gap-4 md:grid-cols-2 xl:max-h-full xl:grid-cols-2 xl:overflow-y-auto xl:pr-2 2xl:grid-cols-3">
-              {sessions.map((session) => (
-                <div
-                  key={session.id}
-                  className="rounded-[1.5rem] border border-ink/10 bg-mist p-5"
-                >
-                  <div className="flex items-start justify-between gap-3">
-                    <div>
-                      <p className="text-sm font-semibold uppercase tracking-[0.2em] text-teal">
-                        {formatSessionDate(session.createdAt)}
-                      </p>
-                      <h3 className="mt-3 text-xl font-bold text-ink sm:text-2xl">
-                        {session.roleTitle}
-                      </h3>
-                    </div>
-                    <p className={`text-3xl font-bold ${gradeColor(session.overall_grade)}`}>
-                      {session.overall_grade}
-                    </p>
-                  </div>
-                  <div className="mt-4 flex flex-wrap gap-3">
-                    <span className="rounded-full bg-white px-4 py-2 text-xs font-semibold uppercase tracking-[0.2em] text-ink/60">
-                      {session.interviewType}
-                    </span>
-                  </div>
-                  <button
-                    type="button"
-                    onClick={() => handleRetake(session)}
-                    className="mt-6 rounded-full bg-coral px-5 py-3 text-sm font-semibold text-white transition hover:bg-coral/90"
+            <div className="mt-5 space-y-4 xl:max-h-full xl:min-w-0 xl:overflow-x-hidden xl:overflow-y-auto xl:pr-2">
+              {sessions.map((session) => {
+                const jdPreview = getJobDescriptionPreview(
+                  session.jd || session.roleTitle || "Untitled role",
+                );
+                const isExpanded = Boolean(expandedSessions[session.id]);
+                const visibleLines = isExpanded ? jdPreview.full : jdPreview.preview;
+
+                return (
+                  <div
+                    key={session.id}
+                    className="rounded-[1.5rem] border border-ink/10 bg-mist p-5 overflow-hidden"
                   >
-                    Retake
-                  </button>
-                </div>
-              ))}
+                    <p className="text-sm font-semibold uppercase tracking-[0.2em] text-teal">
+                      {formatSessionDate(session.createdAt)}
+                    </p>
+
+                    <div className="mt-4 flex min-w-0 items-start gap-4">
+                      <div className="flex min-w-[5rem] flex-col items-start rounded-[1.25rem] bg-white px-4 py-3">
+                        <span className="text-[11px] font-semibold uppercase tracking-[0.2em] text-ink/45">
+                          Grade
+                        </span>
+                        <span className={`mt-2 text-4xl font-bold leading-none ${gradeColor(session.overall_grade)}`}>
+                          {session.overall_grade}
+                        </span>
+                      </div>
+
+                      <div className="min-w-0 flex-1 overflow-hidden">
+                        <div className="flex flex-wrap items-center gap-3">
+                          <span className="rounded-full bg-white px-4 py-2 text-xs font-semibold uppercase tracking-[0.2em] text-ink/60">
+                            {session.interviewType}
+                          </span>
+                        </div>
+                        <div className="mt-3 min-w-0 space-y-2">
+                          {visibleLines.map((line, index) => (
+                            <p
+                              key={`${session.id}-line-${index}`}
+                              className={[
+                                "break-words text-sm leading-7 text-ink/75",
+                                index === 0 ? "font-semibold text-ink" : "",
+                              ].join(" ")}
+                            >
+                              {line}
+                            </p>
+                          ))}
+                        </div>
+                        {jdPreview.hasMore ? (
+                          <button
+                            type="button"
+                            onClick={() => toggleSessionExpanded(session.id)}
+                            className="mt-3 text-sm font-semibold text-teal transition hover:text-teal/80"
+                          >
+                            {isExpanded ? "Show less" : "Show more"}
+                          </button>
+                        ) : null}
+                      </div>
+                    </div>
+
+                    <div className="mt-5 flex justify-end">
+                      <button
+                        type="button"
+                        onClick={() => handleRetake(session)}
+                        className="rounded-full bg-coral px-5 py-3 text-sm font-semibold text-white transition hover:bg-coral/90"
+                      >
+                        Retake
+                      </button>
+                    </div>
+                  </div>
+                );
+              })}
             </div>
           ) : (
             <div className="mt-5 rounded-[1.5rem] border border-dashed border-ink/15 bg-mist p-6 text-center">
@@ -557,7 +615,7 @@ function DashboardPage() {
           )}
         </section>
 
-        <section className="rounded-[1.5rem] border border-ink/10 bg-white p-5 shadow-panel sm:p-6">
+        <section className="rounded-[1.5rem] border border-ink/10 bg-white p-5 shadow-panel sm:p-6 xl:min-w-0 xl:overflow-hidden">
           <p className="text-sm font-semibold uppercase tracking-[0.2em] text-teal">
             Progress trend
           </p>
