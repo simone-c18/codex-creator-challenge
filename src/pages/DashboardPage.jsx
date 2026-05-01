@@ -17,7 +17,7 @@ import ChartLoadingCard from "../components/ChartLoadingCard";
 import PageShell from "../components/PageShell";
 import { useAuth } from "../context/AuthContext";
 import { useInterview } from "../context/InterviewContext";
-import { db } from "../lib/firebase";
+import { clearUserResumeViaRest, db, saveUserResumeViaRest } from "../lib/firebase";
 
 const DashboardTrendChart = lazy(() => import("../components/DashboardTrendChart"));
 
@@ -55,6 +55,19 @@ function getSessionSortValue(session) {
 
 function sortSessionsByNewest(items) {
   return [...items].sort((left, right) => getSessionSortValue(right) - getSessionSortValue(left));
+}
+
+function withTimeout(promise, ms, message) {
+  return Promise.race([
+    promise,
+    new Promise((_, reject) => {
+      window.setTimeout(() => reject(new Error(message)), ms);
+    }),
+  ]);
+}
+
+function isTimeoutError(error) {
+  return error instanceof Error && error.message.includes("taking too long");
 }
 
 function DashboardPage() {
@@ -298,25 +311,49 @@ function DashboardPage() {
         fileName: file.name,
         textLength: resumeText.length,
       });
-      await setDoc(
-        doc(db, "users", currentUser.uid),
-        {
-          resumeText,
-          resumeFilename: file.name,
-          updatedAt: serverTimestamp(),
-        },
-        { merge: true },
-      );
-      logDashboard("resumeUpload:saved", {
-        uid: currentUser.uid,
-        fileName: file.name,
-      });
 
       setInterviewState((current) => ({
         ...current,
         resumeText,
         resumeFilename: file.name,
       }));
+
+      try {
+        await withTimeout(
+          setDoc(
+            doc(db, "users", currentUser.uid),
+            {
+              resumeText,
+              resumeFilename: file.name,
+              updatedAt: serverTimestamp(),
+            },
+            { merge: true },
+          ),
+          8000,
+          "Resume parsed, but saving to Firebase is taking too long.",
+        );
+      } catch (sdkError) {
+        logDashboard("resumeUpload:sdk-save-failed", {
+          uid: currentUser.uid,
+          fileName: file.name,
+          message: sdkError?.message,
+          code: sdkError?.code,
+          name: sdkError?.name,
+        });
+
+        const idToken = await currentUser.getIdToken();
+        await saveUserResumeViaRest(currentUser.uid, resumeText, file.name, idToken);
+        logDashboard("resumeUpload:saved-rest", {
+          uid: currentUser.uid,
+          fileName: file.name,
+          timeoutFallback: isTimeoutError(sdkError),
+        });
+      }
+
+      logDashboard("resumeUpload:saved", {
+        uid: currentUser.uid,
+        fileName: file.name,
+      });
       toast.success("Resume uploaded successfully");
     } catch (error) {
       logDashboard("resumeUpload:error", {
@@ -344,21 +381,43 @@ function DashboardPage() {
     logDashboard("resumeRemove:start", { uid: currentUser.uid });
 
     try {
-      await setDoc(
-        doc(db, "users", currentUser.uid),
-        {
-          resumeText: "",
-          resumeFilename: "",
-          updatedAt: serverTimestamp(),
-        },
-        { merge: true },
-      );
-      logDashboard("resumeRemove:saved", { uid: currentUser.uid });
       setInterviewState((current) => ({
         ...current,
         resumeText: "",
         resumeFilename: "",
       }));
+
+      try {
+        await withTimeout(
+          setDoc(
+            doc(db, "users", currentUser.uid),
+            {
+              resumeText: "",
+              resumeFilename: "",
+              updatedAt: serverTimestamp(),
+            },
+            { merge: true },
+          ),
+          8000,
+          "Removing your resume is taking too long.",
+        );
+      } catch (sdkError) {
+        logDashboard("resumeRemove:sdk-save-failed", {
+          uid: currentUser.uid,
+          message: sdkError?.message,
+          code: sdkError?.code,
+          name: sdkError?.name,
+        });
+
+        const idToken = await currentUser.getIdToken();
+        await clearUserResumeViaRest(currentUser.uid, idToken);
+        logDashboard("resumeRemove:saved-rest", {
+          uid: currentUser.uid,
+          timeoutFallback: isTimeoutError(sdkError),
+        });
+      }
+
+      logDashboard("resumeRemove:saved", { uid: currentUser.uid });
       toast.success("Resume removed");
     } catch (error) {
       logDashboard("resumeRemove:error", {
