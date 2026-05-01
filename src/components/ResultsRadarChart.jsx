@@ -6,9 +6,14 @@ import {
   ResponsiveContainer,
 } from "recharts";
 
-function ResultsRadarChart({ scoreData }) {
+function ResultsRadarChart({ scoreData, compact = false }) {
   return (
-    <div className="mt-6 h-[340px] w-full rounded-[1.5rem] bg-mist p-4">
+    <div
+      className={[
+        "mt-4 w-full rounded-[1.5rem] bg-mist p-4",
+        compact ? "h-[220px] xl:h-[240px]" : "h-[340px]",
+      ].join(" ")}
+    >
       <ResponsiveContainer width="100%" height="100%">
         <RadarChart data={scoreData}>
           <PolarGrid stroke="#c8d6df" />

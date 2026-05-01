@@ -199,72 +199,106 @@ function ResultsPage() {
       title="Review the coaching report"
       description="This report blends overall scoring, transcript annotations, and question-level critique so you can see both the pattern and the detail."
     >
-      <div className="space-y-5 xl:flex xl:h-[calc(100svh-15.5rem)] xl:min-h-0 xl:flex-col xl:overflow-hidden">
+      <div className="space-y-6 lg:pb-28">
         <div
           ref={reportRef}
-          className="space-y-5 xl:grid xl:min-h-0 xl:flex-1 xl:grid-cols-[0.78fr_1.22fr] xl:gap-5 xl:space-y-0 xl:overflow-hidden"
+          className="space-y-6 lg:grid lg:grid-cols-[minmax(320px,0.78fr)_minmax(0,1.22fr)] lg:items-start lg:gap-8 lg:space-y-0"
         >
-          <div className="space-y-5 xl:min-h-0 xl:overflow-y-auto xl:pr-2">
-            <section className="rounded-[1.5rem] border border-ink/10 bg-white p-5 text-center shadow-panel sm:p-6">
-              <p className="text-sm font-semibold uppercase tracking-[0.2em] text-coral">
-                Section 1 — Grade & Summary
-              </p>
-              <p className={`mt-4 font-display text-6xl font-semibold sm:text-7xl ${gradeColor}`}>
-                {report.overall_grade}
-              </p>
-              <p className="mx-auto mt-4 max-w-3xl text-base leading-7 text-ink/75 sm:text-lg sm:leading-8">
-                {report.summary}
-              </p>
-            </section>
-
-            <section className="rounded-[1.5rem] border border-ink/10 bg-white p-5 shadow-panel sm:p-6">
-              <p className="text-sm font-semibold uppercase tracking-[0.2em] text-teal">
-                Section 2 — Radar Chart
-              </p>
-              <Suspense fallback={<ChartLoadingCard message="Loading results chart…" />}>
-                <ResultsRadarChart scoreData={scoreData} />
-              </Suspense>
-            </section>
-
-            {frameSummary ? (
-              <section className="rounded-[1.5rem] border border-ink/10 bg-white p-5 shadow-panel sm:p-6">
-                <p className="text-sm font-semibold uppercase tracking-[0.2em] text-teal">
-                  Camera Presence
-                </p>
-                <div className="mt-5 flex gap-6">
-                  <div className="text-center">
-                    <p className="text-3xl font-bold text-ink">{frameSummary.good_percentage}%</p>
-                    <p className="mt-1 text-xs text-ink/50">Time in frame</p>
-                  </div>
-                  <div className="text-center">
-                    <p className="text-3xl font-bold text-ink">{frameSummary.away_seconds}s</p>
-                    <p className="mt-1 text-xs text-ink/50">Time away</p>
-                  </div>
+          <div className="space-y-6 lg:sticky lg:top-6">
+            <section className="rounded-[1.5rem] border border-ink/10 bg-white p-5 shadow-panel sm:p-6 lg:p-7">
+              <div className="space-y-6">
+                <div className="text-center lg:text-left">
+                  <p className="text-[11px] font-semibold uppercase tracking-[0.24em] text-coral/80">
+                    Section 1 — Grade & Summary
+                  </p>
+                  <p
+                    className={`mt-4 font-display text-5xl font-semibold leading-none sm:text-6xl ${gradeColor}`}
+                  >
+                    {report.overall_grade}
+                  </p>
                 </div>
-                <p className="mt-4 text-sm text-ink/65">{frameSummary.summary}</p>
-              </section>
-            ) : null}
 
-            {videoBlobUrl ? (
-              <section className="rounded-[1.5rem] border border-ink/10 bg-white p-4 shadow-panel">
-                <p className="text-sm font-semibold uppercase tracking-[0.2em] text-coral">
-                  Session video
+                <div className="space-y-4">
+                  <p className="text-[11px] font-semibold uppercase tracking-[0.24em] text-teal/80">
+                    Coach summary
+                  </p>
+                  <p className="text-sm leading-7 text-ink/75 sm:text-base sm:leading-8">
+                    {report.summary}
+                  </p>
+                  {frameSummary ? (
+                    <div className="grid gap-0 overflow-hidden rounded-[1.25rem] border border-ink/10 bg-mist sm:grid-cols-3">
+                      <div className="p-4 sm:p-5">
+                        <p className="text-[10px] font-semibold uppercase tracking-[0.22em] text-teal/80">
+                          In frame
+                        </p>
+                        <p className="mt-2 text-2xl font-bold text-ink">
+                          {frameSummary.good_percentage}%
+                        </p>
+                      </div>
+                      <div className="border-t border-ink/10 p-4 sm:border-l sm:border-t-0 sm:p-5">
+                        <p className="text-[10px] font-semibold uppercase tracking-[0.22em] text-teal/80">
+                          Time away
+                        </p>
+                        <p className="mt-2 text-2xl font-bold text-ink">
+                          {frameSummary.away_seconds}s
+                        </p>
+                      </div>
+                      <div className="border-t border-ink/10 p-4 sm:border-l sm:border-t-0 sm:p-5">
+                        <p className="text-[10px] font-semibold uppercase tracking-[0.22em] text-teal/80">
+                          Presence
+                        </p>
+                        <p className="mt-2 text-sm leading-6 text-ink/65">
+                          {frameSummary.summary}
+                        </p>
+                      </div>
+                    </div>
+                  ) : null}
+                </div>
+              </div>
+            </section>
+
+            <div className="grid gap-6 lg:grid-cols-1">
+              <section className="rounded-[1.5rem] border border-ink/10 bg-white p-5 shadow-panel sm:p-6 lg:p-7">
+                <p className="text-[11px] font-semibold uppercase tracking-[0.24em] text-teal/80">
+                  Section 2 — Radar Chart
                 </p>
-                <video
-                  src={videoBlobUrl}
-                  controls
-                  className="mt-4 aspect-video w-full rounded-[1.25rem] bg-ink"
-                />
+                <Suspense fallback={<ChartLoadingCard compact message="Loading results chart…" />}>
+                  <ResultsRadarChart compact scoreData={scoreData} />
+                </Suspense>
               </section>
-            ) : null}
+
+              {videoBlobUrl ? (
+                <section className="rounded-[1.5rem] border border-ink/10 bg-white p-5 shadow-panel sm:p-6 lg:p-7">
+                  <p className="text-[11px] font-semibold uppercase tracking-[0.24em] text-coral/80">
+                    Session video
+                  </p>
+                  <div className="mt-5">
+                    <video
+                      src={videoBlobUrl}
+                      controls
+                      className="aspect-video w-full rounded-[1.25rem] bg-ink object-cover"
+                    />
+                  </div>
+                </section>
+              ) : (
+                <section className="rounded-[1.5rem] border border-ink/10 bg-white p-5 shadow-panel sm:p-6 lg:p-7">
+                  <p className="text-[11px] font-semibold uppercase tracking-[0.24em] text-coral/80">
+                    Session video
+                  </p>
+                  <p className="mt-5 text-sm leading-7 text-ink/65">
+                    The recording will appear here when a session video is available.
+                  </p>
+                </section>
+              )}
+            </div>
           </div>
 
-          <div className="space-y-5 xl:min-h-0 xl:overflow-hidden">
-            <section className="rounded-[1.5rem] border border-ink/10 bg-white p-5 shadow-panel sm:p-6 xl:flex xl:min-h-0 xl:flex-col">
-              <p className="text-sm font-semibold uppercase tracking-[0.2em] text-teal">
+          <div className="space-y-6">
+            <section className="rounded-[1.5rem] border border-ink/10 bg-white p-5 shadow-panel sm:p-6 lg:p-7">
+              <p className="text-[11px] font-semibold uppercase tracking-[0.24em] text-teal/80">
                 Section 3 — Annotated Transcript
               </p>
-              <div className="mt-6 space-y-4 xl:min-h-0 xl:flex-1 xl:overflow-y-auto xl:pr-1">
+              <div className="mt-6 space-y-4 lg:max-h-[44vh] lg:overflow-y-auto lg:pr-2">
                 {transcriptEntries.map((entry, index) => {
                   const matchingAnnotations =
                     report.annotations?.filter(
@@ -272,8 +306,11 @@ function ResultsPage() {
                     ) || [];
 
                   return (
-                    <div key={`${entry.question_id}-${index}`} className="rounded-[1.5rem] bg-mist p-4 sm:p-5">
-                      <p className="text-xs font-semibold uppercase tracking-[0.2em] text-coral">
+                    <div
+                      key={`${entry.question_id}-${index}`}
+                      className="rounded-[1.5rem] bg-mist p-4 sm:p-5 lg:p-6"
+                    >
+                      <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-coral/80">
                         {entry.is_follow_up ? "Follow-up answer" : "Answer"}
                       </p>
                       <p className="mt-2 text-sm leading-7 text-ink/65">{entry.question}</p>
@@ -304,11 +341,11 @@ function ResultsPage() {
               </div>
             </section>
 
-            <section className="rounded-[1.5rem] border border-ink/10 bg-white p-5 shadow-panel sm:p-6 xl:flex xl:min-h-0 xl:flex-col">
-              <p className="text-sm font-semibold uppercase tracking-[0.2em] text-teal">
+            <section className="rounded-[1.5rem] border border-ink/10 bg-white p-5 shadow-panel sm:p-6 lg:p-7">
+              <p className="text-[11px] font-semibold uppercase tracking-[0.24em] text-teal/80">
                 Section 4 — Question Breakdown
               </p>
-              <div className="mt-6 space-y-4 xl:min-h-0 xl:flex-1 xl:overflow-y-auto xl:pr-1">
+              <div className="mt-6 space-y-4">
                 {report.question_feedback?.map((item, index) => {
                   const isOpen = openCard === index;
                   const matchingQuestion = questions.find((question) => question.id === item.question_id);
@@ -366,7 +403,7 @@ function ResultsPage() {
           </div>
         </div>
 
-        <div className="flex flex-col gap-3 sm:flex-row">
+        <div className="flex flex-col gap-3 sm:flex-row lg:fixed lg:bottom-6 lg:left-1/2 lg:z-20 lg:w-[min(calc(100%-3rem),1120px)] lg:-translate-x-1/2 lg:justify-end lg:rounded-[1.25rem] lg:border lg:border-white/70 lg:bg-white/90 lg:p-4 lg:shadow-panel lg:backdrop-blur">
           <Link
             to="/dashboard"
             className="inline-flex rounded-full bg-ink px-5 py-3 text-sm font-semibold text-white transition hover:bg-ink/90"
